@@ -1,0 +1,2606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kafka Dashboard — UAP</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: var(--bg); }
+    .subnav { display: flex; background: var(--navy-1); border-bottom: 1px solid var(--border); padding: 0 40px; }
+    .subnav__link { display: inline-flex; align-items: center; gap: 6px; padding: 13px 16px; font-size: .85rem; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; text-decoration: none; transition: color var(--t), border-color var(--t); }
+    .subnav__link:hover { color: var(--text); }
+    .subnav__link--active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .content { padding: 28px 40px; }
+    .page-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+    .page-heading__title { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+    .page-heading__sub { font-size: .88rem; color: var(--text-muted); }
+    /* KPI cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .kpi { background: var(--navy-1); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 20px; }
+    .kpi__label { font-size: .73rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .kpi__value { font-size: 1.9rem; font-weight: 700; line-height: 1; margin-bottom: 3px; }
+    .kpi__sub { font-size: .75rem; color: var(--text-muted); }
+    .kpi--danger  .kpi__value { color: var(--danger); }
+    .kpi--success .kpi__value { color: var(--success); }
+    .kpi--warn    .kpi__value { color: var(--warn); }
+    .kpi--orange  .kpi__value { color: #FF6B35; }
+    /* Tab bar — orange active */
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 22px; background: var(--navy-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px; width: fit-content; flex-wrap: wrap; }
+    .tab-btn { padding: 7px 16px; border: none; background: transparent; color: var(--text-muted); font-size: .83rem; font-weight: 500; border-radius: var(--r-xs); cursor: pointer; transition: background var(--t), color var(--t); white-space: nowrap; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn--active { background: var(--navy-1); color: #FF6B35; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .tab-panel { display: none; }
+    .tab-panel--active { display: block; }
+    /* ── Dashboard controls bar ── */
+    .dash-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+    .dash-select { background:var(--navy-1); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 10px; font-size:.82rem; color:var(--text); cursor:pointer; }
+    .dash-select:focus { outline:none; border-color:var(--accent); }
+    .dash-divider { width:1px; height:20px; background:var(--border); flex-shrink:0; }
+    .dash-label { font-size:.78rem; color:var(--text-muted); font-weight:500; }
+    .dash-refresh-btn { background:var(--navy-1); border:1px solid var(--border); border-radius:var(--r-xs); padding:6px 12px; font-size:.82rem; color:var(--text); cursor:pointer; }
+    .dash-refresh-btn:hover { border-color:var(--accent); color:var(--accent); }
+    /* ── Filter bar per tab ── */
+    .filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    .filter-chip { background:var(--navy-2); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:.78rem; color:var(--text-muted); cursor:pointer; transition:all var(--t); }
+    .filter-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .filter-input { background:var(--navy-1); border:1px solid var(--border); border-radius:var(--r-xs); padding:4px 10px; font-size:.82rem; color:var(--text); width:180px; }
+    .filter-input:focus { outline:none; border-color:var(--accent); }
+    /* Tables */
+    .data-table-wrap { background: var(--navy-1); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 16px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .data-table th { padding: 10px 14px; text-align: left; font-size: .72rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); background: var(--navy-2); border-bottom: 1px solid var(--border); }
+    .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--navy-3); }
+    .data-table__empty { padding: 32px; text-align: center; color: var(--text-dim); }
+    /* Charts */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; margin-bottom: 22px; }
+    .chart-card { background: var(--navy-1); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; }
+    .chart-card__title { font-size: .87rem; font-weight: 600; margin-bottom: 14px; }
+    .chart-wrap { position: relative; max-height: 280px; }
+    /* Severity badges */
+    .sev { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 700; }
+    .sev--critical { background: rgba(220,38,38,.12); color: #dc2626; }
+    .sev--warning  { background: rgba(217,119,6,.12);  color: #d97706; }
+    .sev--healthy  { background: rgba(22,163,74,.1);   color: #16a34a; }
+    /* Broker cards */
+    .broker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .broker-card { background: var(--navy-1); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; }
+    .broker-card__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .broker-card__name { font-size: .95rem; font-weight: 700; }
+    .broker-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .bm { }
+    .bm__label { font-size: .68rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+    .bm__value { font-size: 1.1rem; font-weight: 700; }
+    /* Progress bar */
+    .progress-bar { background: var(--navy-3); border-radius: 4px; height: 7px; overflow: hidden; width: 100%; }
+    .progress-bar__fill { height: 100%; border-radius: 4px; transition: width .3s; }
+    /* Anomaly cards */
+    .anomaly-list { display: flex; flex-direction: column; gap: 12px; }
+    .anomaly-card { background: var(--navy-1); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; }
+    .anomaly-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .anomaly-card__desc { font-size: .88rem; color: var(--text); margin-bottom: 10px; }
+    .anomaly-card__recs { font-size: .82rem; color: var(--text-muted); }
+    .anomaly-card__recs li { margin: 4px 0; margin-left: 16px; }
+    /* Connector task bar */
+    .task-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .task-label { font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+    @media (max-width: 768px) { .subnav { padding: 0 20px; } .content { padding: 20px; } .chart-grid { grid-template-columns: 1fr; } .broker-grid { grid-template-columns: 1fr; } }
+    #tab-insights hr {
+      margin: 8px 0;
+      border: none;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <a href="/" class="topbar__brand">
+      <span style="font-size:1.1rem;
+      font-weight:700;color:#ffffff;
+      letter-spacing:1px;
+      font-family:inherit;">OPERATIVE</span>
+    </a>
+    <nav class="topbar__nav">
+      <a href="/" class="topbar__link">Agents</a>
+      <a href="/admin/" class="topbar__link">Admin</a>
+    </nav>
+    <div class="topbar__right" style="font-size:.85rem;color:var(--text-muted)">Kafka Analyser</div>
+  </header>
+
+  <nav class="subnav">
+    <a href="/chat?agent=kafka-analyser" data-standalone-href="chat.html" class="subnav__link">💬 Chat</a>
+    <a href="/agents/kafka-analyser/dashboard" data-standalone-href="dashboard.html" class="subnav__link subnav__link--active">📊 Dashboard</a>
+    <a href="/agents/kafka-analyser/reports" data-standalone-href="reports.html" class="subnav__link">📁 Reports</a>
+    <a href="/agents/kafka-analyser/settings" data-standalone-href="settings.html" class="subnav__link">⚙ Settings</a>
+  </nav>
+
+  <div class="content">
+    <div class="page-heading">
+      <div>
+        <div class="page-heading__title">Kafka Dashboard</div>
+        <div class="page-heading__sub">Cluster health, consumer lag, broker metrics and anomaly detection</div>
+      </div>
+      <button class="btn btn--primary" id="genBtn" onclick="generateAndLoad()" style="display:none">⚡ Generate Synthetic Data</button>
+    </div>
+
+    <!-- Dashboard controls bar -->
+    <div class="dash-controls" id="dash-controls" style="display:none">
+      <span class="dash-label">Cluster</span>
+      <select class="dash-select" id="ctrl-cluster">
+        <option value="">Loading…</option>
+      </select>
+      <div class="dash-divider"></div>
+      <span class="dash-label">Time</span>
+      <select class="dash-select" id="ctrl-time">
+        <option value="5m">Last 5 mins</option>
+        <option value="1h">Last 1 hour</option>
+        <option value="6h">Last 6 hours</option>
+        <option value="24h" selected>Last 24 hours</option>
+        <option value="7d">Last 7 days</option>
+      </select>
+      <div class="dash-divider"></div>
+      <span class="dash-label">Refresh</span>
+      <select class="dash-select" id="ctrl-refresh">
+        <option value="0">Off</option>
+        <option value="30">30s</option>
+        <option value="60">1 min</option>
+        <option value="300">5 min</option>
+      </select>
+      <button class="dash-refresh-btn" id="ctrl-refresh-now" title="Refresh now">↺ Refresh</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn tab-btn--active" data-tab="overview"        onclick="switchTab('overview',this)">Cluster Overview</button>
+      <button class="tab-btn"                 data-tab="brokers"         onclick="switchTab('brokers',this)">Brokers</button>
+      <button class="tab-btn"                 data-tab="topics"          onclick="switchTab('topics',this)">Topics</button>
+      <button class="tab-btn"                 data-tab="consumer-groups" onclick="switchTab('consumer-groups',this)">Consumer Groups</button>
+      <button class="tab-btn"                 data-tab="zookeeper"       onclick="switchTab('zookeeper',this)">ZooKeeper</button>
+      <button class="tab-btn"                 data-tab="kafka-connect"   onclick="switchTab('kafka-connect',this)">Kafka Connect</button>
+      <button class="tab-btn"                 data-tab="schema-registry" onclick="switchTab('schema-registry',this)">Schema Registry</button>
+      <button class="tab-btn"                 data-tab="mirrormaker"     onclick="switchTab('mirrormaker',this)">MirrorMaker</button>
+      <button class="tab-btn"                 data-tab="insights"        onclick="switchTab('insights',this)">AI Insights</button>
+    </div>
+
+    <div id="tab-overview"        class="tab-panel tab-panel--active"></div>
+    <div id="tab-consumer-groups" class="tab-panel"></div>
+    <div id="tab-topics"          class="tab-panel"></div>
+    <div id="tab-brokers"         class="tab-panel"></div>
+    <div id="tab-schema-registry" class="tab-panel"></div>
+    <div id="tab-zookeeper" class="tab-panel"></div>
+    <div id="tab-kafka-connect" class="tab-panel"></div>
+    <div id="tab-mirrormaker" class="tab-panel"></div>
+    <div id="tab-insights"        class="tab-panel"></div>
+  </div>
+
+  <script>
+    // ── Standalone mode: stub portal dependencies ─────────────────────────
+    if (typeof window._authHeaders !== 'function') {
+      window.BACKEND_URL = '';
+      window._authHeaders = () => ({});
+      window.portalReady = Promise.resolve();
+      window.showToast = (msg, type) => console.log('[toast]', type || 'info', msg);
+    }
+  </script>
+  <script>
+    // ── Dual-mode detection: works inside Operative portal AND standalone ──
+    const _isPortalMode = (typeof window._isPortalEnv !== 'undefined' && window._isPortalEnv === true);
+  </script>
+  <script>
+    const SLUG  = 'kafka-analyser';
+    const PROXY = _isPortalMode ? `${BACKEND_URL}/api/agents/${SLUG}/proxy` : '';
+
+    const charts = {};
+    const _loaded = new Set();
+
+    // ── API helper ───────────────────────────────────────────────────────────
+
+    function _getMinutes() {
+      const v = document.getElementById('ctrl-time').value;
+      if (v === '5m') return 5;
+      if (v === '1h') return 60;
+      if (v === '6h') return 360;
+      if (v === '24h') return 1440;
+      if (v === '7d') return 10080;
+      return 1440;
+    }
+    function _getHours() { return _getMinutes() / 60; }
+    async function api(path, opts = {}) {
+      const params = new URLSearchParams();
+      if (_currentClusterId) params.set('cluster_id', _currentClusterId);
+      const mins = _getMinutes();
+      if (mins) params.set('minutes', mins);
+      const qs = params.toString();
+      const url = qs ? `${PROXY}${path}?${qs}` : `${PROXY}${path}`;
+      const res = await fetch(url, {
+        ...opts,
+        headers: { ..._authHeaders(), ...opts.headers },
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(e.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    // ── Formatters ───────────────────────────────────────────────────────────
+
+    function fmtNum(n) { return (n ?? 0).toLocaleString(); }
+    function fmtRate(n) {
+      if (!n) return '0/s';
+      if (n >= 1e6) return (n/1e6).toFixed(1) + 'M/s';
+      if (n >= 1e3) return Math.round(n/1e3) + 'K/s';
+      return n + '/s';
+    }
+    function fmtBytes(b) {
+      if (!b) return '0 B';
+      if (b >= 1e12) return (b/1e12).toFixed(1) + ' TB';
+      if (b >= 1e9)  return (b/1e9).toFixed(1)  + ' GB';
+      if (b >= 1e6)  return (b/1e6).toFixed(1)  + ' MB';
+      return Math.round(b/1e3) + ' KB';
+    }
+    function metricColor(pct) {
+      if (pct >= 80) return 'var(--danger)';
+      if (pct >= 60) return '#d97706';
+      return 'var(--success)';
+    }
+    function sevBadge(sev) {
+      return `<span class="sev sev--${sev}">${sev.toUpperCase()}</span>`;
+    }
+    function stateBadge(state) {
+      const styles = {
+        'Stable':      'background:rgba(22,163,74,.1);color:#16a34a',
+        'Rebalancing': 'background:rgba(234,88,12,.1);color:#ea580c',
+        'Dead':        'background:rgba(220,38,38,.1);color:#dc2626',
+        'Empty':       'background:rgba(100,116,139,.12);color:#64748b',
+        'Unknown':     'background:rgba(100,116,139,.12);color:#64748b',
+      };
+      const s = styles[state] || 'background:rgba(99,102,241,.1);color:#6366f1';
+      return `<span style="${s};padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700">${state}</span>`;
+    }
+    function trendCell(trend, rate) {
+      if (trend === 'growing')    return `<span style="color:var(--danger);font-weight:600">▲ growing</span>`;
+      if (trend === 'recovering') return `<span style="color:var(--success)">▼ recovering</span>`;
+      return `<span style="color:var(--text-muted)">→ stable</span>`;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function skeletonHTML() {
+      return `<div style="display:flex;flex-direction:column;gap:12px;padding:4px 0">
+        ${[80,60,90,70].map(w=>`<div class="skeleton" style="height:14px;width:${w}%"></div>`).join('')}
+      </div>`;
+    }
+    function emptyState(icon, title, sub) {
+      return `<div class="empty-state"><div class="empty-state__icon">${icon}</div>
+        <div class="empty-state__title">${title}</div>
+        <div class="empty-state__sub">${sub || ''}</div></div>`;
+    }
+    function destroyChart(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } }
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('tab-panel--active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-btn--active'));
+      document.getElementById('tab-' + name).classList.add('tab-panel--active');
+      btn.classList.add('tab-btn--active');
+      if (!_loaded.has(name)) loadTab(name);
+    }
+
+    // ── Per-tab loading ──────────────────────────────────────────────────────
+
+    async function loadTab(name) {
+      const el = document.getElementById('tab-' + name);
+      el.innerHTML = skeletonHTML();
+      try {
+        switch (name) {
+          case 'overview': {
+            const [ov, cg, tp] = await Promise.all([
+              api('/dashboard/overview'),
+              api('/dashboard/consumer-groups').catch(() => ({ consumer_groups: [] })),
+              api('/dashboard/topics').catch(() => ({ topics: [] })),
+            ]);
+            _loaded.add(name);
+            renderOverview(ov, (cg.consumer_groups || []), tp);
+            break;
+          }
+          case 'consumer-groups': {
+            const d = await api('/dashboard/consumer-groups');
+            _loaded.add(name);
+            renderConsumerGroups(d);
+            break;
+          }
+          case 'topics': {
+            const d = await api('/dashboard/topics');
+            _loaded.add(name);
+            renderTopics(d);
+            break;
+          }
+          case 'brokers': {
+            const d = await api('/dashboard/brokers');
+            _loaded.add(name);
+            renderBrokers(d);
+            break;
+          }
+          case 'insights': {
+            const d = await api('/dashboard/insights');
+            _loaded.add(name);
+            renderInsights(d);
+            break;
+          }
+          case 'schema-registry': {
+            const d = await api('/dashboard/schema-registry');
+            renderSchemaRegistry(d);
+            break;
+          }
+          case 'zookeeper': {
+            const d = await api('/dashboard/zookeeper');
+            renderZooKeeper(d);
+            break;
+          }
+          case 'kafka-connect': {
+            const d = await api('/dashboard/kafka-connect');
+            renderKafkaConnect(d);
+            break;
+          }
+          case 'mirrormaker': {
+            const d = await api('/dashboard/mirrormaker');
+            renderMirrorMaker(d);
+            break;
+          }
+        }
+      } catch (e) {
+        document.getElementById('tab-' + name).innerHTML =
+          emptyState('⚠', 'Failed to load', e.message);
+      }
+    }
+
+    // ── Generate & reload ────────────────────────────────────────────────────
+
+    async function generateAndLoad() {
+      const btn = document.getElementById('genBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Generating…';
+      try {
+        const d = await api('/reports/generate-sample', { method: 'POST' });
+        showToast(d.message || 'Synthetic data generated', 'success');
+        _loaded.clear();
+        // Reload current active tab
+        const activeBtn = document.querySelector('.tab-btn--active');
+        const activeTab = activeBtn ? activeBtn.dataset.tab : 'overview';
+        loadTab(activeTab);
+      } catch (e) {
+        showToast('Generation failed: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⚡ Generate Synthetic Data';
+      }
+    }
+
+    // ── Tab 1: Cluster Overview ──────────────────────────────────────────────
+
+    function renderOverview(data, consumerGroups, topicsData) {
+      if (data.empty) {
+        document.getElementById('tab-overview').innerHTML = emptyState('🔌',
+          'No cluster data loaded',
+          `Click "Generate Synthetic Data" above, or configure a Kafka source on the <a href="${_isPortalMode ? '/agents/kafka-analyser/settings' : 'settings.html'}">Settings</a> page.`);
+        return;
+      }
+
+      const cluster   = data.cluster   || {};
+      const brokers   = data.brokers   || [];
+      const anomalies = data.anomalies || [];
+      const groups    = consumerGroups || [];
+      const topics    = (topicsData && topicsData.topics) || [];
+      const connectors = (data.connectors || (topicsData && topicsData.connectors)) || [];
+
+      const msgOf   = t => (t.messages_in_per_sec ?? t.msgs_per_sec ?? 0);
+      const partsOf = t => (t.partition_count ?? t.partitions ?? 0);
+      const urpOf   = t => (t.under_replicated_partitions ?? t.urp_count ?? 0);
+      const nameOf  = t => (t.name || t.topic || 'Unknown');
+
+      const GREEN = '#16a34a', ORANGE = '#d97706', RED = '#dc2626';
+
+      // ── KPI metrics ─────────────────────────────────────────────────────────
+      const brokerCount      = cluster.broker_count || brokers.length;
+      const allBrokersHealthy = brokers.length > 0 && brokers.every(b => b.status === 'healthy');
+      const topicCount       = topics.length || cluster.topic_count || 0;
+      const totalPartitions  = topics.reduce((s, t) => s + partsOf(t), 0);
+      const consumerGroupCount = groups.length;
+      const totalURPs        = brokers.reduce((s, b) => s + (b.urp_count || 0), 0);
+      const healthScore      = cluster.health_score || 0;
+      const criticalCount    = cluster.critical_count || 0;
+
+      const healthClass = healthScore >= 100 ? 'kpi--success' : healthScore > 80 ? 'kpi--warn' : 'kpi--danger';
+
+      const kpis = `
+        <div class="kpi-grid">
+          <div class="kpi ${allBrokersHealthy ? 'kpi--success' : 'kpi--danger'}">
+            <div class="kpi__label">Brokers Online</div>
+            <div class="kpi__value">${brokers.length}/${brokerCount}</div>
+            <div class="kpi__sub">${cluster.name || 'cluster'}</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Topics</div>
+            <div class="kpi__value">${topicCount}</div>
+            <div class="kpi__sub">topics</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Partitions</div>
+            <div class="kpi__value">${fmtNum(totalPartitions)}</div>
+            <div class="kpi__sub">across all topics</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Consumer Groups</div>
+            <div class="kpi__value">${consumerGroupCount}</div>
+            <div class="kpi__sub">active</div>
+          </div>
+          <div class="kpi ${totalURPs > 0 ? 'kpi--danger' : 'kpi--success'}">
+            <div class="kpi__label">Under-Replicated Partitions</div>
+            <div class="kpi__value">${totalURPs}</div>
+            <div class="kpi__sub">partitions</div>
+          </div>
+          <div class="kpi ${healthClass}">
+            <div class="kpi__label">Health Score</div>
+            <div class="kpi__value">${healthScore}</div>
+            <div class="kpi__sub">${criticalCount} critical issue${criticalCount !== 1 ? 's' : ''}</div>
+          </div>
+        </div>`;
+
+      // ── Cluster health strip ────────────────────────────────────────────────
+      const pill = (label, color) => `
+        <span style="display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:var(--navy-2);border:1px solid var(--border);font-size:.8rem;font-weight:600;color:var(--text)">
+          <span style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0"></span>${label}
+        </span>`;
+
+      const brokersColor = brokers.some(b => b.status !== 'healthy') ? RED : GREEN;
+
+      const anyTopicURP   = topics.some(t => urpOf(t) > 0 || t.status === 'critical');
+      const anyTopicStale = topics.some(t => msgOf(t) === 0);
+      const topicsColor   = anyTopicURP ? RED : anyTopicStale ? ORANGE : GREEN;
+
+      const criticalGroups = groups.filter(g => (g.total_lag || 0) > 10000).length;
+      const warningGroups  = groups.filter(g => (g.total_lag || 0) > 1000 && (g.total_lag || 0) <= 10000).length;
+      const lagColor = criticalGroups > 0 ? RED : warningGroups > 0 ? ORANGE : GREEN;
+
+      const connectorsPill = connectors.length
+        ? pill('Connectors', connectors.some(c => (c.state || c.status) === 'FAILED') ? RED : GREEN)
+        : '';
+
+      const healthStrip = `
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px">
+          ${pill('Brokers', brokersColor)}
+          ${pill('Topics', topicsColor)}
+          ${pill('Consumer Lag', lagColor)}
+          ${connectorsPill}
+        </div>`;
+
+      // ── Charts ──────────────────────────────────────────────────────────────
+      const overviewCharts = `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Cluster Activity — Messages/sec Over Time</div>
+            <div class="chart-wrap" id="overview-activity-wrap" style="height:220px"><canvas id="overview-activity-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Partition Distribution by Topic</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="overview-partitions-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      const topByParts = [...topics].sort((a, b) => partsOf(b) - partsOf(a)).slice(0, 10);
+
+      // ── Broker health summary (compact) ─────────────────────────────────────
+      const brokerCards = brokers.map(b => `
+          <div class="broker-card">
+            <div class="broker-card__header">
+              <span class="broker-card__name">Broker ID: ${(b.broker_id ?? b.id ?? 'Broker')}</span>
+              <span class="sev sev--${b.status === 'healthy' ? 'healthy' : b.status === 'warning' ? 'warning' : 'critical'}">${b.status.toUpperCase()}</span>
+            </div>
+            <div class="broker-metrics">
+              <div class="bm"><div class="bm__label">Heap</div><div class="bm__value" style="color:${metricColor(b.heap_pct)}">${b.heap_pct}%</div></div>
+              <div class="bm"><div class="bm__label">CPU</div><div class="bm__value" style="color:${metricColor(b.cpu_pct)}">${b.cpu_pct}%</div></div>
+              <div class="bm"><div class="bm__label">URPs</div><div class="bm__value" style="color:${b.urp_count > 0 ? 'var(--danger)' : 'var(--success)'}">${b.urp_count}</div></div>
+              <div class="bm"><div class="bm__label">GC Pauses</div><div class="bm__value" style="color:${(b.gc_pause_count ?? b.gc_pause_ms ?? 0) > 0 ? '#d97706' : 'var(--success)'}">${(b.gc_pause_count ?? b.gc_pause_ms ?? 0)}</div></div>
+            </div>
+          </div>`).join('');
+
+      // ── Anomalies table ─────────────────────────────────────────────────────
+      const anomalyRows = anomalies.length
+        ? anomalies.map(a => `
+            <tr>
+              <td>${sevBadge(a.severity)}</td>
+              <td style="font-size:.78rem;color:var(--text-muted);text-transform:uppercase;font-weight:600">${a.category.replace(/_/g,' ')}</td>
+              <td>${a.description}</td>
+            </tr>`).join('')
+        : `<tr><td colspan="3" class="data-table__empty">✅ No active anomalies</td></tr>`;
+
+      document.getElementById('tab-overview').innerHTML =
+        kpis + healthStrip + overviewCharts + `
+        <div class="chart-card__title">Broker Health</div>
+        <div class="broker-grid">${brokerCards}</div>
+        <div class="chart-card__title">Active Anomalies</div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Severity</th><th>Category</th><th>Description</th></tr></thead>
+            <tbody>${anomalyRows}</tbody>
+          </table>
+        </div>`;
+
+      setTimeout(async () => {
+        if (window._overviewActivityChart) { window._overviewActivityChart.destroy(); window._overviewActivityChart = null; }
+        const activityWrap = document.getElementById('overview-activity-wrap');
+        const noData = () => {
+          if (activityWrap) {
+            activityWrap.innerHTML =
+              `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:.85rem">No historical data available</div>`;
+          }
+        };
+        const activityCtx = document.getElementById('overview-activity-chart')?.getContext('2d');
+        if (activityCtx) {
+          try {
+            const clusterId = window._currentClusterId
+              || (typeof _currentClusterId !== 'undefined' ? _currentClusterId : null)
+              || document.getElementById('ctrl-cluster')?.value;
+            const qs = new URLSearchParams();
+            qs.set('minutes', String(_getMinutes()));
+            if (clusterId) qs.set('cluster_id', clusterId);
+            const hist = await fetch(`${PROXY}/dashboard/topics/history?${qs.toString()}`,
+              { headers: _authHeaders(), cache: 'no-store' }).then(r => r.json());
+
+            if (hist.empty || !hist.series || !hist.series.length || !hist.labels || !hist.labels.length) {
+              noData();
+            } else {
+              const timeVal = document.getElementById('ctrl-time').value;
+              let _lastDateLabel = '';
+              const labels = hist.labels.map(l => {
+                const d = new Date(l);
+                if (timeVal === '7d') {
+                  return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+                } else if (timeVal === '24h') {
+                  const dayLabel = d.toLocaleDateString([], { weekday: 'short' });
+                  const timeLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  if (dayLabel !== _lastDateLabel) { _lastDateLabel = dayLabel; return dayLabel + ' ' + timeLabel; }
+                  return timeLabel;
+                } else {
+                  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+              });
+              const totals = hist.labels.map((_, i) =>
+                hist.series.reduce((sum, s) => sum + ((s.values && s.values[i]) || 0), 0));
+              window._overviewActivityChart = new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                  labels,
+                  datasets: [{
+                    label: 'Messages/sec',
+                    data: totals,
+                    borderColor: '#FF6B35',
+                    backgroundColor: 'rgba(255,107,53,0.1)',
+                    borderWidth: 2,
+                    pointRadius: labels.length < 20 ? 3 : 0,
+                    tension: 0.3,
+                    fill: true,
+                  }],
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { display: false }, title: { display: false } },
+                  scales: {
+                    x: { ticks: { maxTicksLimit: 12, font: { size: 10 }, maxRotation: 45 } },
+                    y: { ticks: { callback: v => fmtRate(v), font: { size: 10 } }, beginAtZero: true },
+                  },
+                },
+              });
+            }
+          } catch (e) {
+            console.warn('Overview activity chart failed:', e);
+            noData();
+          }
+        }
+
+        if (window._overviewPartitionsChart) { window._overviewPartitionsChart.destroy(); window._overviewPartitionsChart = null; }
+        const partsCtx = document.getElementById('overview-partitions-chart')?.getContext('2d');
+        if (partsCtx) {
+          window._overviewPartitionsChart = new Chart(partsCtx, {
+            type: 'bar',
+            data: {
+              labels: topByParts.map(nameOf),
+              datasets: [{ label: 'Partitions', data: topByParts.map(partsOf), backgroundColor: '#4FC3F7', borderWidth: 0 }],
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: {
+                x: { ticks: { callback: v => fmtNum(v), font: { size: 10 } }, beginAtZero: true },
+                y: { ticks: { font: { size: 10 } } },
+              },
+            },
+          });
+        }
+      }, 0);
+    }
+
+    // ── Tab 2: Consumer Groups ────────────────────────────────────────────────
+
+    function renderConsumerGroups(data) {
+      if (data.empty) {
+        document.getElementById('tab-consumer-groups').innerHTML = emptyState('📭', 'No data', 'Generate synthetic data first.');
+        return;
+      }
+      const groups = data.consumer_groups || [];
+      const cgRowHtml = g => {
+        const lagColor = g.lag_trend === 'growing' && g.total_lag > 10000 ? 'style="color:var(--danger);font-weight:700"' : '';
+        let trendHtml;
+        if (g.lag_trend === 'growing') {
+          const color = g.total_lag > 1000 ? 'var(--danger)' : '#d97706';
+          trendHtml = `<span style="color:${color};font-weight:600">↑ growing</span>`;
+        } else if (g.lag_trend === 'shrinking') {
+          trendHtml = `<span style="color:var(--success);font-weight:600">↓ shrinking</span>`;
+        } else {
+          trendHtml = `<span style="color:var(--text-muted)">→ stable</span>`;
+        }
+        return `<tr>
+          <td style="font-weight:600">${(g.group_id || g.group_name || 'Unknown')}</td>
+          <td><code style="font-size:.8rem">${(g.topic || (g.partitions && g.partitions[0] && g.partitions[0].topic) || '-')}</code></td>
+          <td ${lagColor}>${fmtNum(g.total_lag)}</td>
+          <td>${trendHtml}</td>
+          <td style="font-size:.82rem;color:var(--text-muted)">${g.lag_rate_per_min > 0 ? '+' : ''}${fmtNum(g.lag_rate_per_min)}/min</td>
+          <td>${stateBadge(g.state)}</td>
+          <td><span class="sev sev--${g.total_lag > 10000 ? 'critical' : g.total_lag > 1000 ? 'warning' : 'healthy'}">${g.total_lag > 10000 ? 'CRITICAL' : g.total_lag > 1000 ? 'WARNING' : 'HEALTHY'}</span></td>
+        </tr>`;
+      };
+
+      const cgFilters = `
+        <div class="filter-bar">
+          <span class="dash-label">State:</span>
+          <span class="filter-chip active" onclick="window._cgSetState('all',this)">All</span>
+          <span class="filter-chip" onclick="window._cgSetState('active',this)">Active</span>
+          <span class="filter-chip" onclick="window._cgSetState('empty',this)">Empty</span>
+          <input class="filter-input" id="cg-search" placeholder="Search group…" oninput="window._cgSearch(this.value)" />
+        </div>
+        <div class="filter-bar">
+          <span class="dash-label">Health:</span>
+          <span class="filter-chip active" onclick="window._cgSetFilter('all',this)">All</span>
+          <span class="filter-chip" onclick="window._cgSetFilter('critical',this)">Critical</span>
+          <span class="filter-chip" onclick="window._cgSetFilter('warning',this)">Warning</span>
+          <span class="filter-chip" onclick="window._cgSetFilter('healthy',this)">Healthy</span>
+        </div>
+      `;
+
+      const totalGroups   = groups.length;
+      const criticalCount = groups.filter(g => g.total_lag > 10000).length;
+      const warningCount  = groups.filter(g => g.total_lag > 1000 && g.total_lag <= 10000).length;
+      const healthyCount  = groups.filter(g => g.total_lag <= 1000).length;
+
+      const cgKpis = `
+        <div class="kpi-grid">
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Groups</div>
+            <div class="kpi__value">${totalGroups}</div>
+            <div class="kpi__sub">consumer groups</div>
+          </div>
+          <div class="kpi kpi--danger">
+            <div class="kpi__label">Critical</div>
+            <div class="kpi__value">${criticalCount}</div>
+            <div class="kpi__sub">lag &gt; 10,000</div>
+          </div>
+          <div class="kpi kpi--warn">
+            <div class="kpi__label">Warning</div>
+            <div class="kpi__value">${warningCount}</div>
+            <div class="kpi__sub">lag 1,001–10,000</div>
+          </div>
+          <div class="kpi kpi--success">
+            <div class="kpi__label">Healthy</div>
+            <div class="kpi__value">${healthyCount}</div>
+            <div class="kpi__sub">lag &le; 1,000</div>
+          </div>
+        </div>`;
+
+      const topLag = [...groups]
+        .sort((a, b) => (b.total_lag || 0) - (a.total_lag || 0))
+        .slice(0, 10);
+      const hasLag = groups.some(g => (g.total_lag || 0) > 0);
+
+      const cgChart = hasLag
+        ? `<div class="chart-card" style="margin-bottom:22px">
+             <div class="chart-card__title">Top 10 Consumer Groups by Lag</div>
+             <div class="chart-wrap" style="height:280px"><canvas id="cg-lag-chart"></canvas></div>
+           </div>`
+        : `<div class="filter-bar" style="color:var(--text-muted)">
+             ℹ️ No active consumer lag detected — consumers are keeping up or no active subscribers
+           </div>`;
+
+      document.getElementById('tab-consumer-groups').innerHTML = cgKpis + cgChart + cgFilters + `
+        <div class="chart-card__title">Consumer Group Inventory</div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Group</th><th>Topic</th><th>Total Lag</th><th>Trend</th><th>Rate/min</th><th>State</th><th>Status</th></tr></thead>
+            <tbody id="cg-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px">
+          <span id="cg-count-label" class="dash-label"></span>
+          <button id="cg-show-more" class="btn btn--secondary btn--sm" onclick="window._cgShowMore()">Show More</button>
+        </div>`;
+
+      // ── Self-contained consumer-group table view: pagination + filters + search (AND) ──
+      const CG_PAGE = 20;
+      window._cgView = { state: 'all', filter: 'all', search: '', visible: CG_PAGE };
+
+      const cgMatches = (g, st) => {
+        const name = (g.group_id || g.group_name || 'Unknown');
+        if (st.search && !name.toLowerCase().includes(st.search.toLowerCase())) return false;
+        const gState = (g.state || '').toLowerCase();
+        if (st.state === 'active' && gState === 'empty') return false;
+        if (st.state === 'empty' && gState !== 'empty') return false;
+        const lag = g.total_lag || 0;
+        switch (st.filter) {
+          case 'critical': return lag > 10000;
+          case 'warning':  return lag > 1000 && lag <= 10000;
+          case 'healthy':  return lag <= 1000;
+          default:         return true;
+        }
+      };
+
+      window._cgApplyView = function () {
+        const st = window._cgView;
+        const filtered = groups.filter(g => cgMatches(g, st));
+        const shown = filtered.slice(0, st.visible);
+        const tbody = document.getElementById('cg-tbody');
+        if (tbody) {
+          tbody.innerHTML = shown.map(cgRowHtml).join('') ||
+            `<tr><td colspan="7" class="data-table__empty">No consumer groups match</td></tr>`;
+        }
+        const label = document.getElementById('cg-count-label');
+        if (label) label.textContent = `Showing ${shown.length} of ${filtered.length} groups`;
+        const moreBtn = document.getElementById('cg-show-more');
+        if (moreBtn) moreBtn.style.display = shown.length < filtered.length ? '' : 'none';
+      };
+
+      const cgSetActiveChip = (el) => {
+        el.parentElement.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+      };
+
+      window._cgSetState = function (state, el) {
+        window._cgView.state = state;
+        window._cgView.visible = CG_PAGE; // reset Show More on filter change
+        cgSetActiveChip(el);
+        window._cgApplyView();
+      };
+      window._cgSetFilter = function (f, el) {
+        window._cgView.filter = f;
+        window._cgView.visible = CG_PAGE;
+        cgSetActiveChip(el);
+        window._cgApplyView();
+      };
+      window._cgSearch = function (val) {
+        window._cgView.search = val;
+        window._cgView.visible = CG_PAGE;
+        window._cgApplyView();
+      };
+      window._cgShowMore = function () {
+        window._cgView.visible += CG_PAGE;
+        window._cgApplyView();
+      };
+
+      window._cgApplyView();
+
+      if (hasLag) {
+        setTimeout(() => {
+          if (window._cgLagChart) { window._cgLagChart.destroy(); window._cgLagChart = null; }
+          const ctx = document.getElementById('cg-lag-chart')?.getContext('2d');
+          if (!ctx) return;
+          window._cgLagChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: topLag.map(g => (g.group_id || g.group_name || 'Unknown')),
+              datasets: [{
+                label: 'Total Lag',
+                data: topLag.map(g => g.total_lag || 0),
+                backgroundColor: topLag.map(g =>
+                  g.total_lag > 10000 ? '#dc2626'
+                  : (g.total_lag > 1000 && g.lag_trend === 'growing') ? '#d97706'
+                  : g.total_lag > 1000 ? '#FFC107'
+                  : '#16a34a'),
+                borderWidth: 0,
+              }],
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: {
+                x: { ticks: { callback: v => fmtNum(v), font: { size: 10 } }, beginAtZero: true },
+                y: { ticks: { font: { size: 10 } } },
+              },
+            },
+          });
+        }, 0);
+      }
+      window._renderTabAI('consumer-groups', document.getElementById('tab-consumer-groups'));
+    }
+
+    // ── Tab 3: Topics ─────────────────────────────────────────────────────────
+
+    function renderTopics(data) {
+      if (data.empty) {
+        document.getElementById('tab-topics').innerHTML = emptyState('📬', 'No data', 'Generate synthetic data first.');
+        return;
+      }
+      const topics = (data.topics || []).slice(0, 10);
+
+      const topicStatusBadge = t => {
+        if (logSize(t) > 1000 && msgRate(t) === 0) return `<span class="sev" style="background:rgba(100,116,139,.12);color:var(--text-muted)">STALE</span>`;
+        if (topicLowRep(t)) return `<span style="background:#666;color:#fff;padding:2px 8px;border-radius:4px;font-size:.72rem">LOW-REP</span>`;
+        return `<span class="sev sev--healthy">HEALTHY</span>`;
+      };
+
+      const topicRowHtml = t => `<tr>
+          <td style="font-weight:600"><code style="font-size:.8rem">${(t.name || t.topic || 'Unknown')}</code></td>
+          <td style="text-align:center">${(t.partition_count || t.partitions || 0)}</td>
+          <td style="text-align:center">${t.replication_factor}</td>
+          <td>${fmtRate(t.messages_in_per_sec)}</td>
+          <td style="font-size:.82rem;color:var(--text-muted)">${fmtBytes(t.bytes_in_per_sec || 0)}/s</td>
+          <td style="text-align:right;font-size:.82rem">${fmtBytes(t.size_bytes || 0)}</td>
+          <td>${topicStatusBadge(t)}</td>
+        </tr>`;
+
+      const topicFilters = `
+        <div class="filter-bar">
+          <span class="dash-label">Show:</span>
+          <span class="filter-chip active" onclick="window._setTopicShow(false,this)">All</span>
+          <span class="filter-chip" onclick="window._setTopicShow(true,this)">User Topics</span>
+          <input class="filter-input" id="topic-search" placeholder="Search topic…" oninput="window._topicSearch(this.value)" />
+        </div>
+        <div class="filter-bar">
+          <span class="dash-label">Filter:</span>
+          <span class="filter-chip active" onclick="window._setTopicFilter('all',this)">All</span>
+          <span class="filter-chip" onclick="window._setTopicFilter('anomalous',this)">Anomalous Only</span>
+          <span class="filter-chip" onclick="window._setTopicFilter('high',this)">High Traffic</span>
+          <span class="filter-chip" onclick="window._setTopicFilter('stale',this)">Stale</span>
+          <span class="filter-chip" onclick="window._setTopicFilter('underrep',this)">Low Replication</span>
+        </div>
+      `;
+
+      const allTopics = data.topics || [];
+      const msgRate = t => (t.msgs_per_sec ?? t.messages_in_per_sec ?? 0);
+      const logSize = t => (t.log_size_bytes ?? t.size_bytes ?? 0);
+      const topicRf = t => (t.replication_factor ?? t.rf ?? 0);
+      const topicParts = t => (t.partition_count ?? t.partitions ?? 0);
+      const topicLowRep = t => topicRf(t) === 1;
+
+      const totalTopics      = allTopics.length;
+      const highTraffic      = allTopics.filter(t => msgRate(t) > 0.001).length;
+      const lowReplication   = allTopics.filter(topicLowRep).length;
+      const staleTopics      = allTopics.filter(t => logSize(t) > 0 && msgRate(t) === 0).length;
+
+      const topicKpis = `
+        <div class="kpi-grid">
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Topics</div>
+            <div class="kpi__value">${totalTopics}</div>
+            <div class="kpi__sub">topics</div>
+          </div>
+          <div class="kpi kpi--success">
+            <div class="kpi__label">High Traffic</div>
+            <div class="kpi__value">${highTraffic}</div>
+            <div class="kpi__sub">&gt; 0.001 msgs/sec</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Low Replication</div>
+            <div class="kpi__value">${lowReplication}</div>
+            <div class="kpi__sub">RF = 1</div>
+          </div>
+          <div class="kpi kpi--warn">
+            <div class="kpi__label">Stale</div>
+            <div class="kpi__value">${staleTopics}</div>
+            <div class="kpi__sub">has data, no traffic</div>
+          </div>
+        </div>`;
+
+      const topByMsgs = [...allTopics].sort((a, b) => msgRate(b) - msgRate(a)).slice(0, 10);
+      const topBySize = [...allTopics].sort((a, b) => logSize(b) - logSize(a)).slice(0, 10);
+
+      const topicBarCharts = `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Top 10 Topics by Messages/sec</div>
+            <div class="chart-wrap" style="height:260px"><canvas id="topic-msgs-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Top 10 Topics by Log Size</div>
+            <div class="chart-wrap" style="height:260px"><canvas id="topic-size-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      document.getElementById('tab-topics').innerHTML = topicKpis + topicBarCharts + topicFilters + `
+        <div class="chart-card" style="margin-bottom:22px">
+          <div class="chart-card__title">Top 10 Topics by Message Rate</div>
+          <div class="chart-wrap"><canvas id="topicChart"></canvas></div>
+        </div>
+        <div class="chart-card__title">Topic Inventory</div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Topic</th><th style="text-align:center">Partitions</th><th style="text-align:center">RF</th><th>Msg/s</th><th>Bytes/s</th><th style="text-align:right">Log Size</th><th>Status</th></tr></thead>
+            <tbody id="topic-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px">
+          <span id="topic-count-label" class="dash-label"></span>
+          <button id="topic-show-more" class="btn btn--secondary btn--sm" onclick="window._topicShowMore()">Show More</button>
+        </div>`;
+
+      // ── Self-contained topic table view: pagination + filter group + search (AND) ──
+      const TOPIC_PAGE = 20;
+      window._topicView = { filter: 'all', userOnly: false, search: '', visible: TOPIC_PAGE };
+
+      const topicMatches = (t, st) => {
+        const name = (t.name || t.topic || 'Unknown');
+        if (st.userOnly && name.startsWith('_')) return false;
+        if (st.search && !name.toLowerCase().includes(st.search.toLowerCase())) return false;
+        const r = msgRate(t), sz = logSize(t), rf = topicRf(t);
+        switch (st.filter) {
+          case 'anomalous': return (r === 0 && sz > 1000) || topicLowRep(t) || (t.retention_pct != null && t.retention_pct > 80);
+          case 'high':      return r > 0.001;
+          case 'stale':     return r === 0 && sz > 0;
+          case 'underrep':  return topicLowRep(t);
+          default:          return true;
+        }
+      };
+
+      window._applyTopicView = function () {
+        const st = window._topicView;
+        const filtered = allTopics.filter(t => topicMatches(t, st));
+        const shown = filtered.slice(0, st.visible);
+        const tbody = document.getElementById('topic-tbody');
+        if (tbody) {
+          tbody.innerHTML = shown.map(topicRowHtml).join('') ||
+            `<tr><td colspan="7" class="data-table__empty">No topics match</td></tr>`;
+        }
+        const label = document.getElementById('topic-count-label');
+        if (label) label.textContent = `Showing ${shown.length} of ${filtered.length} topics`;
+        const moreBtn = document.getElementById('topic-show-more');
+        if (moreBtn) moreBtn.style.display = shown.length < filtered.length ? '' : 'none';
+      };
+
+      const setActiveChip = (el) => {
+        el.parentElement.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+      };
+
+      window._setTopicFilter = function (f, el) {
+        window._topicView.filter = f;
+        window._topicView.visible = TOPIC_PAGE; // reset Show More on filter change
+        setActiveChip(el);
+        window._applyTopicView();
+      };
+      window._setTopicShow = function (userOnly, el) {
+        window._topicView.userOnly = userOnly;
+        window._topicView.visible = TOPIC_PAGE;
+        setActiveChip(el);
+        window._applyTopicView();
+      };
+      window._topicSearch = function (val) {
+        window._topicView.search = val;
+        window._topicView.visible = TOPIC_PAGE;
+        window._applyTopicView();
+      };
+      window._topicShowMore = function () {
+        window._topicView.visible += TOPIC_PAGE;
+        window._applyTopicView();
+      };
+
+      window._applyTopicView();
+
+      setTimeout(async () => {
+        destroyChart('topic');
+        const ctx = document.getElementById('topicChart')?.getContext('2d');
+        if (!ctx) return;
+        try {
+          const mins = _getMinutes();
+          const qs = new URLSearchParams();
+          if (_currentClusterId) qs.set('cluster_id', _currentClusterId);
+          if (mins) qs.set('minutes', mins);
+          const hist = await fetch(`${PROXY}/dashboard/topics/history?${qs.toString()}`,
+            { headers: _authHeaders(), cache: 'no-store' }).then(r => r.json());
+
+          if (!hist.empty && hist.series && hist.series.length > 0) {
+            const colors = ['#FF6B35','#0D9488','#6366f1','#f59e0b','#16a34a'];
+            const timeVal = document.getElementById('ctrl-time').value;
+            let _lastDateLabel = '';
+            const labels = hist.labels.map(l => {
+              const d = new Date(l);
+              if (timeVal === '7d') {
+                return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+              }
+              if (timeVal === '24h') {
+                const hourLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return hourLabel;
+              }
+              if (timeVal === '6h' || timeVal === '1h') {
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              }
+              return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            });
+            // Determine tick interval based on time range
+            let maxTicks = 10;
+            if (timeVal === '5m') maxTicks = 5;
+            else if (timeVal === '1h') maxTicks = 6;
+            else if (timeVal === '6h') maxTicks = 12;
+            else if (timeVal === '24h') maxTicks = 24;
+            else if (timeVal === '7d') maxTicks = 7;
+            charts['topic'] = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels,
+                datasets: hist.series.map((s, i) => ({
+                  label: s.topic,
+                  data: s.values,
+                  borderColor: colors[i % colors.length],
+                  backgroundColor: colors[i % colors.length] + '22',
+                  borderWidth: 2,
+                  pointRadius: labels.length < 20 ? 3 : 1,
+                  tension: 0.3,
+                  fill: false,
+                })),
+              },
+              options: {
+                responsive: true,
+                plugins: {
+                  legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                  title: { display: false },
+                },
+                scales: {
+                  x: { ticks: { maxTicksLimit: maxTicks, font: { size: 10 }, maxRotation: 45 } },
+                  y: { ticks: { callback: v => fmtRate(v), font: { size: 10 } }, beginAtZero: true },
+                },
+              },
+            });
+          } else {
+            // Fallback to bar chart if no history
+            charts['topic'] = new Chart(ctx, {
+              type: 'bar',
+              data: {
+                labels: topics.map(t => (t.name || t.topic || 'Unknown')),
+                datasets: [{ label: 'Messages/sec', data: topics.map(t => t.messages_in_per_sec), backgroundColor: '#FF6B35' }],
+              },
+              options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } },
+            });
+          }
+        } catch(e) {
+          console.warn('Topic history chart failed:', e);
+        }
+      }, 50);
+
+      setTimeout(() => {
+        if (window._topicMsgsChart) { window._topicMsgsChart.destroy(); window._topicMsgsChart = null; }
+        const msgsCtx = document.getElementById('topic-msgs-chart')?.getContext('2d');
+        if (msgsCtx) {
+          window._topicMsgsChart = new Chart(msgsCtx, {
+            type: 'bar',
+            data: {
+              labels: topByMsgs.map(t => (t.name || t.topic || 'Unknown')),
+              datasets: [{ label: 'Messages/sec', data: topByMsgs.map(t => msgRate(t)), backgroundColor: '#FF6B35', borderWidth: 0 }],
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: {
+                x: { ticks: { callback: v => fmtRate(v), font: { size: 10 } }, beginAtZero: true },
+                y: { ticks: { font: { size: 10 } } },
+              },
+            },
+          });
+        }
+
+        if (window._topicSizeChart) { window._topicSizeChart.destroy(); window._topicSizeChart = null; }
+        const sizeCtx = document.getElementById('topic-size-chart')?.getContext('2d');
+        if (sizeCtx) {
+          const fmtSize = v => v >= 1073741824
+            ? (v / 1073741824).toFixed(1) + ' GB'
+            : (v / 1048576).toFixed(0) + ' MB';
+          window._topicSizeChart = new Chart(sizeCtx, {
+            type: 'bar',
+            data: {
+              labels: topBySize.map(t => (t.name || t.topic || 'Unknown')),
+              datasets: [{ label: 'Log Size', data: topBySize.map(t => logSize(t)), backgroundColor: '#4FC3F7', borderWidth: 0 }],
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: {
+                x: { ticks: { callback: v => fmtSize(v), font: { size: 10 } }, beginAtZero: true },
+                y: { ticks: { font: { size: 10 } } },
+              },
+            },
+          });
+        }
+      }, 0);
+      window._renderTabAI('topics', document.getElementById('tab-topics'));
+    }
+
+    // ── Tab 4: Brokers ────────────────────────────────────────────────────────
+
+    function renderBrokers(data) {
+      if (data.empty) {
+        document.getElementById('tab-brokers').innerHTML = emptyState('🖥', 'No data', 'Generate synthetic data first.');
+        return;
+      }
+      const brokers = data.brokers || [];
+
+      const cards = brokers.map(b => {
+        function metricRow(label, pct, max) {
+          const color = metricColor(pct);
+          const fillPct = Math.min(100, pct);
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:.73rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${label}</span>
+              <span style="font-size:.85rem;font-weight:700;color:${color}">${pct}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-bar__fill" style="width:${fillPct}%;background:${color}"></div>
+            </div>
+          </div>`;
+        }
+        return `
+          <div class="broker-card">
+            <div class="broker-card__header">
+              <span class="broker-card__name">Broker ID: ${(b.broker_id || b.id || 'Broker')}</span>
+              <span class="sev sev--${b.status === 'healthy' ? 'healthy' : b.status === 'warning' ? 'warning' : 'critical'}">${b.status.toUpperCase()}</span>
+            </div>
+            ${metricRow('Heap', b.heap_pct)}
+            ${metricRow('CPU', b.cpu_pct)}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+              <div class="bm">
+                <div class="bm__label">GC Pauses</div>
+                <div class="bm__value" style="color:${(b.gc_pause_count ?? b.gc_pause_ms ?? 0) > 0 ? '#d97706' : 'var(--success)'}">${(b.gc_pause_count ?? b.gc_pause_ms ?? 0)}</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Under-Replicated</div>
+                <div class="bm__value" style="color:${b.urp_count > 0 ? 'var(--danger)' : 'var(--success)'}">${b.urp_count}</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Msgs/sec</div>
+                <div class="bm__value" style="font-size:.9rem">${fmtRate(b.messages_in_per_sec)}</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Req Idle %</div>
+                <div class="bm__value" style="font-size:.9rem;color:${b.request_handler_idle_pct >= 80 ? 'var(--success)' : b.request_handler_idle_pct >= 50 ? '#d97706' : 'var(--danger)'}">${b.request_handler_idle_pct}%</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Bytes In/s</div>
+                <div class="bm__value" style="font-size:.85rem">${fmtBytes(b.bytes_in_per_sec || 0)}/s</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Bytes Out/s</div>
+                <div class="bm__value" style="font-size:.85rem">${fmtBytes(b.bytes_out_per_sec || 0)}/s</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">ISR Shrink/s</div>
+                <div class="bm__value" style="font-size:.85rem;color:${(b.isr_shrinks_per_sec || 0) > 0 ? 'var(--danger)' : 'var(--success)'}">${(b.isr_shrinks_per_sec || 0).toFixed(2)}</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">ISR Expand/s</div>
+                <div class="bm__value" style="font-size:.85rem;color:var(--success)">${(b.isr_expands_per_sec || 0).toFixed(2)}</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Produce Latency</div>
+                <div class="bm__value" style="font-size:.85rem">${(b.produce_latency_ms || 0).toFixed(1)}ms</div>
+              </div>
+              <div class="bm">
+                <div class="bm__label">Fetch Latency</div>
+                <div class="bm__value" style="font-size:.85rem">${(b.fetch_latency_ms || 0).toFixed(1)}ms</div>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      // ── KPI cards ─────────────────────────────────────────────────────────────
+      const brokerCount  = brokers.length;
+      const healthyCount = brokers.filter(b => b.status === 'healthy').length;
+      const totalURPs    = brokers.reduce((s, b) => s + (b.urp_count || 0), 0);
+      const avgHeap      = brokerCount ? Math.round(brokers.reduce((s, b) => s + (b.heap_pct || 0), 0) / brokerCount) : 0;
+      const totalISRShrinks = brokers.reduce((s, b) => s + (b.isr_shrinks_per_sec || 0), 0);
+      const avgReqIdle   = brokerCount ? Math.round(brokers.reduce((s, b) => s + (b.request_handler_idle_pct || 0), 0) / brokerCount) : 0;
+      const reqIdleClass = avgReqIdle < 50 ? 'kpi--danger' : avgReqIdle < 80 ? 'kpi--warn' : 'kpi--success';
+
+      const brokerKpis = `
+        <div class="kpi-grid">
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Brokers</div>
+            <div class="kpi__value">${brokerCount}</div>
+            <div class="kpi__sub">brokers</div>
+          </div>
+          <div class="kpi kpi--success">
+            <div class="kpi__label">Healthy</div>
+            <div class="kpi__value">${healthyCount}</div>
+            <div class="kpi__sub">status healthy</div>
+          </div>
+          <div class="kpi ${totalURPs > 0 ? 'kpi--danger' : 'kpi--success'}">
+            <div class="kpi__label">Under-Replicated Partitions</div>
+            <div class="kpi__value">${totalURPs}</div>
+            <div class="kpi__sub">total URPs</div>
+          </div>
+          <div class="kpi ${avgHeap > 80 ? 'kpi--danger' : 'kpi--orange'}">
+            <div class="kpi__label">Avg Heap %</div>
+            <div class="kpi__value">${avgHeap}%</div>
+            <div class="kpi__sub">across brokers</div>
+          </div>
+          <div class="kpi ${totalISRShrinks > 0 ? 'kpi--danger' : 'kpi--success'}">
+            <div class="kpi__label">ISR Shrinks/sec</div>
+            <div class="kpi__value">${totalISRShrinks.toFixed(2)}</div>
+            <div class="kpi__sub">across brokers</div>
+          </div>
+          <div class="kpi ${reqIdleClass}">
+            <div class="kpi__label">Avg Request Handler Idle %</div>
+            <div class="kpi__value">${avgReqIdle}%</div>
+            <div class="kpi__sub">across brokers</div>
+          </div>
+        </div>`;
+
+      // ── Charts ────────────────────────────────────────────────────────────────
+      const brokerCharts = `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div class="chart-card" style="flex:1;min-width:280px;margin-bottom:0">
+            <div class="chart-card__title">CPU &amp; Heap % by Broker</div>
+            <div class="chart-wrap" style="height:240px"><canvas id="broker-cpu-heap-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:280px;margin-bottom:0">
+            <div class="chart-card__title">Network I/O by Broker</div>
+            <div class="chart-wrap" style="height:240px"><canvas id="broker-network-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:280px;margin-bottom:0">
+            <div class="chart-card__title">Produce &amp; Fetch Latency by Broker</div>
+            <div class="chart-wrap" style="height:240px"><canvas id="broker-latency-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      document.getElementById('tab-brokers').innerHTML = brokerKpis + `
+        <div class="chart-card__title">Broker Detail</div>
+        <div class="broker-grid">${cards}</div>` + brokerCharts;
+
+      const brokerLabels = brokers.map(b => 'Broker ' + (b.broker_id ?? b.id ?? '?'));
+
+      setTimeout(() => {
+        if (window._brokerCpuHeapChart) { window._brokerCpuHeapChart.destroy(); window._brokerCpuHeapChart = null; }
+        const cpuHeapCtx = document.getElementById('broker-cpu-heap-chart')?.getContext('2d');
+        if (cpuHeapCtx) {
+          window._brokerCpuHeapChart = new Chart(cpuHeapCtx, {
+            type: 'bar',
+            data: {
+              labels: brokerLabels,
+              datasets: [
+                { label: 'CPU %',  data: brokers.map(b => b.cpu_pct || 0),  backgroundColor: '#FF6B35', borderWidth: 0 },
+                { label: 'Heap %', data: brokers.map(b => b.heap_pct || 0), backgroundColor: '#4FC3F7', borderWidth: 0 },
+                { label: 'Req Idle %', data: brokers.map(b => b.request_handler_idle_pct || 0), backgroundColor: '#4CAF50', borderWidth: 0 },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }, title: { display: false } },
+              scales: {
+                x: { ticks: { font: { size: 10 } } },
+                y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } } },
+              },
+            },
+          });
+        }
+
+        if (window._brokerNetworkChart) { window._brokerNetworkChart.destroy(); window._brokerNetworkChart = null; }
+        const netCtx = document.getElementById('broker-network-chart')?.getContext('2d');
+        if (netCtx) {
+          const fmtNet = v => v >= 1048576
+            ? (v / 1048576).toFixed(1) + ' MB/s'
+            : (v / 1024).toFixed(1) + ' KB/s';
+          window._brokerNetworkChart = new Chart(netCtx, {
+            type: 'bar',
+            data: {
+              labels: brokerLabels,
+              datasets: [
+                { label: 'Bytes In',  data: brokers.map(b => b.bytes_in_per_sec || 0),  backgroundColor: '#4CAF50', borderWidth: 0 },
+                { label: 'Bytes Out', data: brokers.map(b => b.bytes_out_per_sec || 0), backgroundColor: '#FF9800', borderWidth: 0 },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                title: { display: false },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtNet(c.parsed.y)}` } },
+              },
+              scales: {
+                x: { ticks: { font: { size: 10 } } },
+                y: { beginAtZero: true, ticks: { callback: v => fmtNet(v), font: { size: 10 } } },
+              },
+            },
+          });
+        }
+
+        if (window._brokerLatencyChart) { window._brokerLatencyChart.destroy(); window._brokerLatencyChart = null; }
+        const latCtx = document.getElementById('broker-latency-chart')?.getContext('2d');
+        if (latCtx) {
+          window._brokerLatencyChart = new Chart(latCtx, {
+            type: 'bar',
+            data: {
+              labels: brokerLabels,
+              datasets: [
+                { label: 'Produce Latency', data: brokers.map(b => b.produce_latency_ms || 0), backgroundColor: '#9C27B0', borderWidth: 0 },
+                { label: 'Fetch Latency',   data: brokers.map(b => b.fetch_latency_ms || 0),   backgroundColor: '#00BCD4', borderWidth: 0 },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }, title: { display: false } },
+              scales: {
+                x: { ticks: { font: { size: 10 } } },
+                y: { beginAtZero: true, ticks: { callback: v => v + 'ms', font: { size: 10 } } },
+              },
+            },
+          });
+        }
+      }, 0);
+      window._renderTabAI('brokers', document.getElementById('tab-brokers'));
+    }
+
+    // ── Tab 5: Connectors ─────────────────────────────────────────────────────
+
+    function renderKafkaConnect(data) {
+      const el = document.getElementById('tab-kafka-connect');
+
+      if (data.status === 'not_configured') {
+        el.innerHTML = emptyState('🔌', 'Kafka Connect not configured',
+          'Edit the cluster in Settings and add a Kafka Connect URL.');
+        return;
+      }
+      if (data.status === 'unreachable') {
+        el.innerHTML = emptyState('❌', 'Kafka Connect unreachable',
+          `Could not connect to ${data.url}`);
+        return;
+      }
+
+      const s = data.summary || {};
+      const connectors = data.connectors || [];
+
+      if (!connectors.length) {
+        el.innerHTML = `
+          <div class="filter-bar" style="color:var(--text-muted)">
+            ℹ️ No Kafka Connect configured — add Connect URL in cluster settings
+          </div>`;
+        return;
+      }
+
+      // ── KPI cards ─────────────────────────────────────────────────────────────
+      const connectorCount = data.connector_count ?? connectors.length;
+      const runningCount   = s.running ?? connectors.filter(c => c.state === 'RUNNING').length;
+      const failedCount    = s.failed ?? connectors.filter(c => c.state === 'FAILED').length;
+      const totalTasks     = s.total_tasks ?? connectors.reduce((n, c) => n + (c.total_tasks || 0), 0);
+      const failedTasks    = s.failed_tasks ?? connectors.reduce((n, c) => n + (c.failed_tasks || 0), 0);
+
+      const connectKpis = `
+        <div class="kpi-grid">
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Connectors</div>
+            <div class="kpi__value">${connectorCount}</div>
+            <div class="kpi__sub">connectors</div>
+          </div>
+          <div class="kpi kpi--success">
+            <div class="kpi__label">Running</div>
+            <div class="kpi__value">${runningCount}</div>
+            <div class="kpi__sub">connectors</div>
+          </div>
+          <div class="kpi ${failedCount > 0 ? 'kpi--danger' : 'kpi--success'}">
+            <div class="kpi__label">Failed</div>
+            <div class="kpi__value">${failedCount}</div>
+            <div class="kpi__sub">connectors</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Tasks</div>
+            <div class="kpi__value">${totalTasks}</div>
+            <div class="kpi__sub">tasks</div>
+          </div>
+          <div class="kpi ${failedTasks > 0 ? 'kpi--danger' : 'kpi--success'}">
+            <div class="kpi__label">Failed Tasks</div>
+            <div class="kpi__value">${failedTasks}</div>
+            <div class="kpi__sub">tasks</div>
+          </div>
+        </div>`;
+
+      // ── Charts ────────────────────────────────────────────────────────────────
+      const connectCharts = `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Connector Status Distribution</div>
+            <div class="chart-wrap" style="height:240px"><canvas id="connect-status-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Connectors by Type</div>
+            <div class="chart-wrap" style="height:240px"><canvas id="connect-type-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      // ── Table helpers ───────────────────────────────────────────────────────
+      const shortClass = c => {
+        const cls = c.connector_class || c.type || '-';
+        return cls.includes('.') ? cls.split('.').pop() : cls;
+      };
+      const statusBadge = state => {
+        if (state === 'RUNNING') return `<span class="sev sev--healthy">RUNNING</span>`;
+        if (state === 'FAILED')  return `<span class="sev sev--critical">FAILED</span>`;
+        if (state === 'PAUSED')  return `<span class="sev sev--warning">PAUSED</span>`;
+        return `<span class="sev" style="background:rgba(100,116,139,.12);color:var(--text-muted)">${state || 'UNKNOWN'}</span>`;
+      };
+      const taskColor = { RUNNING: '#4CAF50', FAILED: '#F44336', PAUSED: '#FF9800', UNASSIGNED: '#666' };
+      const taskPills = c => {
+        const count = c.total_tasks || (c.tasks ? c.tasks.length : 0);
+        if (!count) return '';
+        const tasks = Array.from({ length: count }, (_, i) => (c.tasks && c.tasks[i]) || {});
+        const pills = tasks.map((t, i) => {
+          const state = t.state || 'RUNNING';
+          const color = taskColor[state] || '#666';
+          const titleParts = [`Task ${i}: ${state}`];
+          if (state === 'FAILED' && t.trace) titleParts.push(String(t.trace).slice(0, 200));
+          const title = titleParts.join(' — ').replace(/"/g, '&quot;');
+          return `<span title="${title}" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color}"></span>`;
+        }).join('');
+        return `<div style="display:inline-flex;gap:2px;margin-top:4px">${pills}</div>`;
+      };
+      const connectRowHtml = c => `<tr>
+          <td style="font-weight:600"><code style="font-size:.8rem">${c.name}</code></td>
+          <td style="font-size:.82rem;color:var(--text-muted);text-transform:capitalize">${c.type || '-'}</td>
+          <td style="font-size:.8rem"><code style="font-size:.78rem">${shortClass(c)}</code></td>
+          <td style="text-align:center;color:${c.failed_tasks > 0 ? 'var(--danger)' : 'var(--text)'}">
+            <div>${c.running_tasks ?? 0}/${c.total_tasks ?? 0}</div>
+            ${taskPills(c)}
+          </td>
+          <td style="font-size:.8rem;color:var(--text-muted)">${c.worker_id || c.worker || '-'}</td>
+          <td>${statusBadge(c.state)}</td>
+        </tr>`;
+
+      el.innerHTML = connectKpis + connectCharts + `
+        <div class="filter-bar">
+          <span class="dash-label">Status:</span>
+          <span class="filter-chip active" onclick="window._connectSetStatus('all',this)">All</span>
+          <span class="filter-chip" onclick="window._connectSetStatus('RUNNING',this)">Running</span>
+          <span class="filter-chip" onclick="window._connectSetStatus('FAILED',this)">Failed</span>
+          <span class="filter-chip" onclick="window._connectSetStatus('PAUSED',this)">Paused</span>
+          <input class="filter-input" id="connector-search" placeholder="Search connector…" oninput="window._connectSearch(this.value)" />
+        </div>
+        <div class="filter-bar">
+          <span class="dash-label">Type:</span>
+          <span class="filter-chip active" onclick="window._connectSetType('all',this)">All</span>
+          <span class="filter-chip" onclick="window._connectSetType('source',this)">Source</span>
+          <span class="filter-chip" onclick="window._connectSetType('sink',this)">Sink</span>
+        </div>
+        <div class="chart-card__title">Connector Inventory</div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Class</th>
+                <th style="text-align:center">Tasks</th>
+                <th>Worker</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="connect-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px">
+          <span id="connect-count-label" class="dash-label"></span>
+          <button id="connect-show-more" class="btn btn--secondary btn--sm" onclick="window._connectShowMore()">Show More</button>
+        </div>`;
+
+      // ── Self-contained table view: pagination + filters + search (AND) ────────
+      const CONNECT_PAGE = 20;
+      window._connectView = { status: 'all', type: 'all', search: '', visible: CONNECT_PAGE };
+
+      const connectMatches = (c, st) => {
+        if (st.status !== 'all' && c.state !== st.status) return false;
+        if (st.type !== 'all' && (c.type || '').toLowerCase() !== st.type) return false;
+        if (st.search && !(c.name || '').toLowerCase().includes(st.search.toLowerCase())) return false;
+        return true;
+      };
+
+      window._connectApplyView = function () {
+        const st = window._connectView;
+        const filtered = connectors.filter(c => connectMatches(c, st));
+        const shown = filtered.slice(0, st.visible);
+        const tbody = document.getElementById('connect-tbody');
+        if (tbody) {
+          tbody.innerHTML = shown.map(connectRowHtml).join('') ||
+            `<tr><td colspan="6" class="data-table__empty">No connectors match</td></tr>`;
+        }
+        const label = document.getElementById('connect-count-label');
+        if (label) label.textContent = `Showing ${shown.length} of ${filtered.length} connectors`;
+        const moreBtn = document.getElementById('connect-show-more');
+        if (moreBtn) moreBtn.style.display = shown.length < filtered.length ? '' : 'none';
+      };
+
+      const connectSetActiveChip = (el2) => {
+        el2.parentElement.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        el2.classList.add('active');
+      };
+
+      window._connectSetStatus = function (status, el2) {
+        window._connectView.status = status;
+        window._connectView.visible = CONNECT_PAGE;
+        connectSetActiveChip(el2);
+        window._connectApplyView();
+      };
+      window._connectSetType = function (type, el2) {
+        window._connectView.type = type;
+        window._connectView.visible = CONNECT_PAGE;
+        connectSetActiveChip(el2);
+        window._connectApplyView();
+      };
+      window._connectSearch = function (val) {
+        window._connectView.search = val;
+        window._connectView.visible = CONNECT_PAGE;
+        window._connectApplyView();
+      };
+      window._connectShowMore = function () {
+        window._connectView.visible += CONNECT_PAGE;
+        window._connectApplyView();
+      };
+
+      window._connectApplyView();
+
+      // ── Doughnut charts ───────────────────────────────────────────────────────
+      setTimeout(() => {
+        if (window._connectStatusChart) { window._connectStatusChart.destroy(); window._connectStatusChart = null; }
+        const statusCtx = document.getElementById('connect-status-chart')?.getContext('2d');
+        if (statusCtx) {
+          const statusDefs = [
+            { label: 'Running',    color: '#4CAF50', count: connectors.filter(c => c.state === 'RUNNING').length },
+            { label: 'Failed',     color: '#F44336', count: connectors.filter(c => c.state === 'FAILED').length },
+            { label: 'Paused',     color: '#FF9800', count: connectors.filter(c => c.state === 'PAUSED').length },
+            { label: 'Unassigned', color: '#666',    count: connectors.filter(c => c.state === 'UNASSIGNED').length },
+          ].filter(d => d.count > 0);
+          window._connectStatusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+              labels: statusDefs.map(d => d.label),
+              datasets: [{ data: statusDefs.map(d => d.count), backgroundColor: statusDefs.map(d => d.color), borderWidth: 0 }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+            },
+          });
+        }
+
+        if (window._connectTypeChart) { window._connectTypeChart.destroy(); window._connectTypeChart = null; }
+        const typeCtx = document.getElementById('connect-type-chart')?.getContext('2d');
+        if (typeCtx) {
+          const typeDefs = [
+            { label: 'Source', color: '#4FC3F7', count: connectors.filter(c => (c.type || '').toLowerCase() === 'source').length },
+            { label: 'Sink',   color: '#FF6B35', count: connectors.filter(c => (c.type || '').toLowerCase() === 'sink').length },
+          ].filter(d => d.count > 0);
+          window._connectTypeChart = new Chart(typeCtx, {
+            type: 'doughnut',
+            data: {
+              labels: typeDefs.map(d => d.label),
+              datasets: [{ data: typeDefs.map(d => d.count), backgroundColor: typeDefs.map(d => d.color), borderWidth: 0 }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+            },
+          });
+        }
+      }, 0);
+      window._renderTabAI('kafka-connect', document.getElementById('tab-kafka-connect'));
+    }
+
+    // ── Tab 6: AI Insights ────────────────────────────────────────────────────
+
+    async function renderInsights(data) {
+      if (data.empty) {
+        document.getElementById('tab-insights').innerHTML = emptyState('🤖', 'No data', 'Generate synthetic data first.');
+        return;
+      }
+      const anomalies = data.anomalies || [];
+
+      // Build anomaly cards
+      const cards = anomalies.length ? anomalies.map(a => {
+        const recs = (a.recommendations || []).map(r => `<li>${r}</li>`).join('');
+        const sevColor = a.severity === 'critical' ? '#dc2626' : '#d97706';
+        return `
+          <div class="anomaly-card">
+            <div class="anomaly-card__header">
+              <div>
+                ${sevBadge(a.severity)}
+                <span style="margin-left:8px;font-size:.78rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${(a.category||'').replace(/_/g,' ')}</span>
+              </div>
+            </div>
+            <div class="anomaly-card__desc">${a.description}</div>
+            ${recs ? `<div class="anomaly-card__recs"><strong style="font-size:.8rem;color:var(--text-muted)">Recommendations:</strong><ul style="margin-top:4px">${recs}</ul></div>` : ''}
+          </div>`;
+      }).join('') : `<div style="text-align:center;padding:2rem;color:var(--success);font-size:.95rem">✅ No active anomalies — all metrics within thresholds</div>`;
+
+      // Narrative section placeholder
+      const narrativeHtml = `
+        <div class="anomaly-card" id="ai-narrative-card" style="margin-bottom:18px;border-color:var(--accent);border-width:2px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-weight:700;font-size:.95rem;color:var(--accent)">🤖 AI Cluster Analysis</div>
+            <button class="dash-refresh-btn" id="btn-get-narrative" style="font-size:.8rem;padding:4px 12px">
+              Generate Analysis
+            </button>
+          </div>
+          <div id="narrative-content" style="font-size:.88rem;color:var(--text-muted);line-height:1.6">
+            Click "Generate Analysis" for an AI-powered summary and recommendations.
+          </div>
+        </div>`;
+
+      document.getElementById('tab-insights').innerHTML = narrativeHtml + `<div class="anomaly-list">${cards}</div>`;
+
+      // Bind narrative button
+      document.getElementById('btn-get-narrative')
+        .addEventListener('click', async () => {
+        const btn = document.getElementById('btn-get-narrative');
+        const content = document.getElementById('narrative-content');
+        btn.textContent = 'Analysing…';
+        btn.disabled = true;
+
+        // Progress messages
+        const progressMessages = [
+          'Analysing cluster health…',
+          'Reviewing broker metrics…',
+          'Checking consumer group health…',
+          'Identifying anomalies…',
+          'Preparing recommendations…',
+        ];
+        let msgIdx = 0;
+        content.style.fontStyle = 'italic';
+        content.style.color = 'var(--text-muted)';
+        content.textContent = progressMessages[0];
+        const progressInterval = setInterval(() => {
+          msgIdx = (msgIdx + 1) % progressMessages.length;
+          content.textContent = progressMessages[msgIdx];
+        }, 2000);
+
+        let fullText = '';
+        let sseBuffer = '';
+        let done_reading = false;
+        let firstToken = false;
+        let stopReason = 'end_turn';
+
+        try {
+          await portalReady;
+          const url = `${PROXY}/dashboard/insights/narrative/stream${
+            _currentClusterId ? '?cluster_id=' + _currentClusterId : ''}`;
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: _authHeaders(),
+          });
+
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done || done_reading) break;
+            const chunk = decoder.decode(value, { stream: true });
+            sseBuffer += chunk;
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6).trimEnd();
+              if (data.startsWith('[STOP_REASON]')) {
+                stopReason = data.slice(14).trim();
+                continue;
+              }
+              if (data === '[DONE]') { done_reading = true; break; }
+              if (data.startsWith('[ERROR]')) {
+                throw new Error(data.slice(7).trim());
+              }
+              if (!firstToken) {
+                firstToken = true;
+                clearInterval(progressInterval);
+                content.style.fontStyle = 'normal';
+                content.style.color = 'var(--text)';
+                content.innerHTML = '';
+              }
+              const text = data.replace(/\\n/g, '\n');
+              fullText += text;
+              // Render markdown progressively
+              const rendered = fullText
+                .replace(/^## (.*)/gm, '<h3 style="color:var(--accent);margin:12px 0 6px">$1</h3>')
+                .replace(/^### (.*)/gm, '<h4 style="margin:8px 0 4px">$1</h4>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+              // Convert markdown tables to HTML tables
+              content.innerHTML = rendered.replace(/(\|.+\|(<br>)?)+/g, tableBlock => {
+                const lines = tableBlock.split('<br>').filter(l => l.trim() && l.includes('|'));
+                const dataLines = lines.filter(l => !/^\|[-| :]+\|$/.test(l.trim()));
+                if (!dataLines.length) return '';
+                const rows = dataLines.map((line, i) => {
+                  const cells = line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+                  const tag = i === 0 ? 'th' : 'td';
+                  const style = i === 0 ? 'padding:5px 10px;border:1px solid var(--border);background:var(--navy-1);font-weight:600' : 'padding:4px 10px;border:1px solid var(--border)';
+                  return '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>';
+                }).join('');
+                return `<table style="border-collapse:collapse;margin:8px 0;font-size:.85rem;width:100%">${rows}</table>`;
+              });
+            }
+          }
+          btn.textContent = '↺ Refresh Analysis';
+          btn.disabled = false;
+          if (stopReason === 'max_tokens') {
+            const continueBtn = document.createElement('button');
+            continueBtn.textContent = 'Continue Analysis ›';
+            continueBtn.className = 'dash-refresh-btn';
+            continueBtn.style.cssText = 'font-size:.8rem;padding:4px 12px;margin-left:8px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer';
+            continueBtn.onclick = async () => {
+              continueBtn.remove();
+              btn.textContent = 'Analysing…';
+              btn.disabled = true;
+              const prevText = fullText;
+              fullText = '';
+              firstToken = false;
+              stopReason = 'end_turn';
+              const contUrl = `${PROXY}/dashboard/insights/narrative/stream${_currentClusterId ? '?cluster_id=' + _currentClusterId : ''}`;
+              const contRes = await fetch(contUrl, {
+                method: 'POST',
+                headers: { ..._authHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ continuation_of: prevText }),
+              });
+              if (!contRes.ok) throw new Error(`HTTP ${contRes.status}`);
+              const contReader = contRes.body.getReader();
+              const contDecoder = new TextDecoder();
+              while (true) {
+                const { done, value } = await contReader.read();
+                if (done) break;
+                const chunk = contDecoder.decode(value, { stream: true });
+                for (const line of chunk.split('\n')) {
+                  if (!line.startsWith('data: ')) continue;
+                  const d = line.slice(6);
+                  if (d.startsWith('[STOP_REASON]')) { stopReason = d.slice(14).trim(); continue; }
+                  if (d === '[DONE]') break;
+                  if (d.startsWith('[ERROR]')) break;
+                  const t = d.replace(/\\n/g, '\n');
+                  fullText += t;
+                }
+              }
+              content.innerHTML = (prevText + fullText)
+                .replace(/^## (.*)/gm, '<h3 style="color:var(--accent);margin:12px 0 6px">$1</h3>')
+                .replace(/^### (.*)/gm, '<h4 style="margin:8px 0 4px">$1</h4>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+              btn.textContent = '↺ Refresh Analysis';
+              btn.disabled = false;
+              if (stopReason === 'max_tokens') content.appendChild(continueBtn.cloneNode(true));
+            };
+            document.getElementById('ai-narrative-card').appendChild(continueBtn);
+          }
+        } catch(e) {
+          clearInterval(progressInterval);
+          content.style.fontStyle = 'normal';
+          content.textContent = 'Failed: ' + e.message;
+          btn.textContent = 'Generate Analysis';
+        }
+        btn.disabled = false;
+      });
+    }
+
+    // ── Reusable per-tab AI analysis drawer ────────────────────────────────────
+    window._tabAICache = window._tabAICache || {};
+    window._aiDrawerTab = null;
+
+    const _AI_TAB_NAMES = {
+      'brokers': 'Brokers',
+      'topics': 'Topics',
+      'consumer-groups': 'Consumer Groups',
+      'kafka-connect': 'Kafka Connect',
+      'zookeeper': 'ZooKeeper',
+      'schema-registry': 'Schema Registry',
+      'mirrormaker': 'MirrorMaker',
+    };
+
+    const _aiRenderMd = (text) => {
+      const rendered = text
+        .replace(/^## (.*)/gm, '<h3 style="color:var(--accent);margin:12px 0 6px">$1</h3>')
+        .replace(/^### (.*)/gm, '<h4 style="margin:8px 0 4px">$1</h4>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^---$/gm, '<hr style="margin:8px 0;border:none;border-top:1px solid var(--border)">')
+        .replace(/\n/g, '<br>');
+      return rendered.replace(/(\|.+\|(<br>)?)+/g, tableBlock => {
+        const lines = tableBlock.split('<br>').filter(l => l.trim() && l.includes('|'));
+        const dataLines = lines.filter(l => !/^\|[-| :]+\|$/.test(l.trim()));
+        if (!dataLines.length) return '';
+        const rows = dataLines.map((line, i) => {
+          const cells = line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+          const tag = i === 0 ? 'th' : 'td';
+          const style = i === 0 ? 'padding:5px 10px;border:1px solid var(--border);background:var(--navy-1);font-weight:600' : 'padding:4px 10px;border:1px solid var(--border)';
+          return '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>';
+        }).join('');
+        return `<table style="border-collapse:collapse;margin:8px 0;font-size:.85rem;width:100%">${rows}</table>`;
+      });
+    };
+
+    function _closeAIDrawer() {
+      const drawer = document.getElementById('ai-drawer');
+      if (drawer) drawer.style.transform = 'translateX(100%)';
+      const backdrop = document.getElementById('ai-drawer-backdrop');
+      if (backdrop) backdrop.style.display = 'none';
+    }
+
+    function _openAIDrawer() {
+      _ensureAIDrawer();
+      document.getElementById('ai-drawer-backdrop').style.display = 'block';
+      requestAnimationFrame(() => {
+        document.getElementById('ai-drawer').style.transform = 'translateX(0)';
+      });
+    }
+
+    function _ensureAIDrawer() {
+      if (document.getElementById('ai-drawer')) return;
+
+      const backdrop = document.createElement('div');
+      backdrop.id = 'ai-drawer-backdrop';
+      backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.2);z-index:999;display:none';
+      backdrop.addEventListener('click', _closeAIDrawer);
+      document.body.appendChild(backdrop);
+
+      const drawer = document.createElement('div');
+      drawer.id = 'ai-drawer';
+      drawer.style.cssText = 'position:fixed;top:0;right:0;height:100vh;width:32%;z-index:1000;'
+        + 'background:var(--navy-1);border-left:1px solid var(--border);'
+        + 'box-shadow:-4px 0 20px rgba(0,0,0,0.3);transform:translateX(100%);'
+        + 'transition:transform 0.3s ease;overflow-y:auto;padding:20px';
+      drawer.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px">
+          <div id="ai-drawer-title" style="font-weight:700;font-size:.95rem;color:var(--accent)">🤖 AI Analysis</div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="dash-refresh-btn" id="ai-drawer-refresh" style="font-size:.8rem;padding:4px 10px">↺ Refresh</button>
+            <button class="dash-refresh-btn" id="ai-drawer-close" style="font-size:.9rem;padding:4px 10px">✕</button>
+          </div>
+        </div>
+        <div id="ai-drawer-content" style="font-size:.88rem;color:var(--text-muted);line-height:1.6"></div>`;
+      document.body.appendChild(drawer);
+
+      document.getElementById('ai-drawer-close').addEventListener('click', _closeAIDrawer);
+      document.getElementById('ai-drawer-refresh').addEventListener('click', () => {
+        const tabId = window._aiDrawerTab;
+        if (!tabId) return;
+        const clusterId = _currentClusterId || (document.getElementById('ctrl-cluster')?.value) || '';
+        delete window._tabAICache[tabId + '_' + clusterId];
+        _runAIDrawer(tabId);
+      });
+    }
+
+    function _aiAddContinue(tabId, prevText) {
+      const content = document.getElementById('ai-drawer-content');
+      const refreshBtn = document.getElementById('ai-drawer-refresh');
+      const continueBtn = document.createElement('button');
+      continueBtn.textContent = 'Continue Analysis ›';
+      continueBtn.className = 'dash-refresh-btn';
+      continueBtn.style.cssText = 'font-size:.8rem;padding:4px 12px;margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer';
+      continueBtn.onclick = async () => {
+        continueBtn.remove();
+        if (refreshBtn) refreshBtn.disabled = true;
+        const clusterId = _currentClusterId || (document.getElementById('ctrl-cluster')?.value) || '';
+        const cacheKey = tabId + '_' + clusterId;
+        let contFull = '';
+        let stopReason = 'end_turn';
+        try {
+          const contUrl = `${PROXY}/dashboard/insights/tab-stream${clusterId ? '?cluster_id=' + clusterId : ''}`;
+          const contRes = await fetch(contUrl, {
+            method: 'POST',
+            headers: { ..._authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tab: tabId, continuation_of: prevText }),
+          });
+          if (!contRes.ok) throw new Error(`HTTP ${contRes.status}`);
+          const contReader = contRes.body.getReader();
+          const contDecoder = new TextDecoder();
+          while (true) {
+            const { done, value } = await contReader.read();
+            if (done || window._aiDrawerTab !== tabId) break;
+            const chunk = contDecoder.decode(value, { stream: true });
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue;
+              const d = line.slice(6);
+              if (d.startsWith('[STOP_REASON]')) { stopReason = d.slice(14).trim(); continue; }
+              if (d === '[DONE]') break;
+              if (d.startsWith('[ERROR]')) break;
+              contFull += d.replace(/\\n/g, '\n');
+            }
+            if (content) content.innerHTML = _aiRenderMd(prevText + contFull);
+          }
+          if (content) content.innerHTML = _aiRenderMd(prevText + contFull);
+          window._tabAICache[cacheKey] = content ? content.innerHTML : '';
+          if (refreshBtn) refreshBtn.disabled = false;
+          if (stopReason === 'max_tokens') _aiAddContinue(tabId, prevText + contFull);
+        } catch (e) {
+          if (refreshBtn) refreshBtn.disabled = false;
+        }
+      };
+      content.parentElement.appendChild(continueBtn);
+    }
+
+    async function _runAIDrawer(tabId) {
+      _ensureAIDrawer();
+      window._aiDrawerTab = tabId;
+      const clusterId = _currentClusterId || (document.getElementById('ctrl-cluster')?.value) || '';
+      const cacheKey = tabId + '_' + clusterId;
+      const titleEl = document.getElementById('ai-drawer-title');
+      const content = document.getElementById('ai-drawer-content');
+      const refreshBtn = document.getElementById('ai-drawer-refresh');
+      if (titleEl) titleEl.textContent = `🤖 AI Analysis — ${_AI_TAB_NAMES[tabId] || tabId}`;
+
+      // Show cached result if present
+      if (window._tabAICache[cacheKey]) {
+        content.style.fontStyle = 'normal';
+        content.style.color = 'var(--text)';
+        content.innerHTML = window._tabAICache[cacheKey];
+        if (refreshBtn) refreshBtn.disabled = false;
+        return;
+      }
+
+      const progressMessages = [
+        'Analysing ' + tabId + '…',
+        'Reviewing metrics…',
+        'Identifying risks…',
+        'Preparing recommendations…',
+      ];
+      let msgIdx = 0;
+      content.style.fontStyle = 'italic';
+      content.style.color = 'var(--text-muted)';
+      content.textContent = progressMessages[0];
+      const progressInterval = setInterval(() => {
+        msgIdx = (msgIdx + 1) % progressMessages.length;
+        if (window._aiDrawerTab === tabId) content.textContent = progressMessages[msgIdx];
+      }, 2000);
+
+      let fullText = '';
+      let sseBuffer = '';
+      let done_reading = false;
+      let firstToken = false;
+      let stopReason = 'end_turn';
+
+      if (refreshBtn) refreshBtn.disabled = true;
+      try {
+        await portalReady;
+        const url = `${PROXY}/dashboard/insights/tab-stream${clusterId ? '?cluster_id=' + clusterId : ''}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { ..._authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tab: tabId }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || done_reading) break;
+          if (window._aiDrawerTab !== tabId) { clearInterval(progressInterval); return; }
+          const chunk = decoder.decode(value, { stream: true });
+          sseBuffer += chunk;
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const dataLine = line.slice(6).trimEnd();
+            if (dataLine.startsWith('[STOP_REASON]')) { stopReason = dataLine.slice(14).trim(); continue; }
+            if (dataLine === '[DONE]') { done_reading = true; break; }
+            if (dataLine.startsWith('[ERROR]')) throw new Error(dataLine.slice(7).trim());
+            if (!firstToken) {
+              firstToken = true;
+              clearInterval(progressInterval);
+              content.style.fontStyle = 'normal';
+              content.style.color = 'var(--text)';
+              content.innerHTML = '';
+            }
+            fullText += dataLine.replace(/\\n/g, '\n');
+            content.innerHTML = _aiRenderMd(fullText);
+          }
+        }
+        clearInterval(progressInterval);
+        window._tabAICache[cacheKey] = content.innerHTML;
+        if (refreshBtn) refreshBtn.disabled = false;
+        if (stopReason === 'max_tokens') _aiAddContinue(tabId, fullText);
+      } catch (e) {
+        clearInterval(progressInterval);
+        content.style.fontStyle = 'normal';
+        content.style.color = 'var(--text)';
+        content.textContent = 'Failed: ' + e.message;
+        if (refreshBtn) refreshBtn.disabled = false;
+      }
+    }
+
+    window._renderTabAI = function (tabId, containerEl) {
+      if (!containerEl) return;
+      _ensureAIDrawer();
+      // Avoid duplicate buttons on re-render
+      const existing = document.getElementById('tab-ai-fab-' + tabId);
+      if (existing) existing.remove();
+
+      const fab = document.createElement('button');
+      fab.id = 'tab-ai-fab-' + tabId;
+      fab.textContent = '🤖 Analyse';
+      fab.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:900;'
+        + 'background:var(--navy-1);color:var(--accent);border:1px solid var(--accent);'
+        + 'border-radius:20px;padding:8px 16px;font-size:.82rem;font-weight:600;cursor:pointer;'
+        + 'box-shadow:0 2px 10px rgba(0,0,0,0.15)';
+      fab.addEventListener('click', () => { _openAIDrawer(); _runAIDrawer(tabId); });
+      containerEl.appendChild(fab);
+    };
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+
+    // ── Dashboard controls ────────────────────────────────────────
+    let _refreshTimer = null;
+    let _currentClusterId = null;
+
+    async function loadClusterSelector() {
+      try {
+        await portalReady;
+        const r = await fetch(`${PROXY}/settings/clusters`, { headers: _authHeaders() });
+        const d = await r.json();
+        const clusters = (d.clusters || []).filter(c => c.enabled);
+        const sel = document.getElementById('ctrl-cluster');
+        if (!clusters.length) {
+          sel.innerHTML = '<option value="">No clusters enabled</option>';
+          return;
+        }
+        sel.innerHTML = clusters.map(c =>
+          `<option value="${c.id}">${c.name} (${c.environment})</option>`
+        ).join('');
+        _currentClusterId = clusters[0].id;
+        document.getElementById('dash-controls').style.display = 'flex';
+      } catch(e) {
+        console.error('Failed to load clusters', e);
+      }
+    }
+
+    function setupRefreshTimer() {
+      if (_refreshTimer) clearInterval(_refreshTimer);
+      const secs = parseInt(document.getElementById('ctrl-refresh').value);
+      if (secs > 0) {
+        _refreshTimer = setInterval(() => {
+          const activeBtn = document.querySelector('.tab-btn--active');
+          if (activeBtn) loadTab(activeBtn.dataset.tab);
+        }, secs * 1000);
+      }
+    }
+
+    document.getElementById('ctrl-refresh').addEventListener('change', setupRefreshTimer);
+    document.getElementById('ctrl-refresh-now').addEventListener('click', () => {
+      const activeBtn = document.querySelector('.tab-btn--active');
+      if (activeBtn) loadTab(activeBtn.dataset.tab);
+    });
+
+    document.getElementById('ctrl-cluster').addEventListener('change', function() {
+      _currentClusterId = this.value;
+      // Show loading state on active tab only
+      const activeBtn = document.querySelector('.tab-btn--active');
+      const activeTab = activeBtn ? activeBtn.dataset.tab : 'overview';
+      const activePanel = document.getElementById('tab-' + activeTab);
+      if (activePanel) {
+        activePanel.style.opacity = '0.4';
+        activePanel.style.pointerEvents = 'none';
+      }
+      loadTab(activeTab).finally(() => {
+        if (activePanel) {
+          activePanel.style.opacity = '1';
+          activePanel.style.pointerEvents = '';
+        }
+      });
+    });
+
+    // ── Tab filters ───────────────────────────────────────────────
+    function filterCG(state, el) {
+      document.querySelectorAll('.filter-bar .filter-chip').forEach(c => {
+        if (c.onclick && c.onclick.toString().includes('filterCG')) c.classList.remove('active');
+      });
+      el.classList.add('active');
+      const rows = document.querySelectorAll('#tab-consumer-groups tbody tr');
+      rows.forEach(row => {
+        if (state === 'all') { row.style.display = ''; return; }
+        const stateCell = row.querySelector('td:last-child');
+        const match = stateCell && stateCell.textContent.toLowerCase().includes(state);
+        row.style.display = match ? '' : 'none';
+      });
+    }
+
+    function filterCGSearch(val) {
+      const rows = document.querySelectorAll('#tab-consumer-groups tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(val.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    function filterTopics(type, el) {
+      document.querySelectorAll('.filter-bar .filter-chip').forEach(c => {
+        if (c.onclick && c.onclick.toString().includes('filterTopics')) c.classList.remove('active');
+      });
+      el.classList.add('active');
+      const rows = document.querySelectorAll('#tab-topics tbody tr');
+      rows.forEach(row => {
+        if (type === 'all') { row.style.display = ''; return; }
+        const nameCell = row.querySelector('td');
+        const isInternal = nameCell && (nameCell.textContent.startsWith('__') || nameCell.textContent.startsWith('_'));
+        row.style.display = (type === 'user' && !isInternal) ? '' : 'none';
+      });
+    }
+
+    function filterTopicSearch(val) {
+      const rows = document.querySelectorAll('#tab-topics tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(val.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    function filterConnectors(state, el) {
+      document.querySelectorAll('.filter-bar .filter-chip').forEach(c => {
+        if (c.onclick && c.onclick.toString().includes('filterConnectors')) c.classList.remove('active');
+      });
+      el.classList.add('active');
+      const rows = document.querySelectorAll('#tab-kafka-connect tbody tr:not([style*="font-family:monospace"])');
+      rows.forEach(row => {
+        if (state === 'all') { row.style.display = ''; return; }
+        const stateCell = row.querySelector('td:nth-child(3)');
+        const match = stateCell && stateCell.textContent.trim() === state;
+        row.style.display = match ? '' : 'none';
+      });
+    }
+
+    function filterConnectorSearch(val) {
+      const rows = document.querySelectorAll('#tab-kafka-connect tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(val.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    function renderSchemaRegistry(data) {
+      const el = document.getElementById('tab-schema-registry');
+      if (data.status === 'not_configured') {
+        el.innerHTML = emptyState('🔌', 'Schema Registry not configured',
+          'Edit the cluster in Settings and add a Schema Registry URL.');
+        return;
+      }
+      if (data.status === 'unreachable') {
+        el.innerHTML = emptyState('❌', 'Schema Registry unreachable',
+          `Could not connect to ${data.url}`);
+        return;
+      }
+
+      const compatColor = {
+        'BACKWARD': 'var(--success)',
+        'FORWARD': '#3b82f6',
+        'FULL': '#8b5cf6',
+        'NONE': 'var(--danger)',
+      };
+
+      const typeColors = {
+        'AVRO': '#4FC3F7',
+        'JSON': '#FF6B35',
+        'PROTOBUF': '#9C27B0',
+      };
+
+      const subjects = data.subjects || [];
+      const isHealthy = data.status === 'healthy';
+
+      // Schema type counts (from schema_types object, else derived from subjects)
+      let schemaTypes = data.schema_types;
+      if (!schemaTypes) {
+        schemaTypes = {};
+        subjects.forEach(s => {
+          const t = (s.schema_type || '').toUpperCase();
+          if (t) schemaTypes[t] = (schemaTypes[t] || 0) + 1;
+        });
+      }
+      const typeDefs = [
+        { label: 'AVRO',     color: '#4FC3F7', count: schemaTypes.AVRO || 0 },
+        { label: 'JSON',     color: '#FF6B35', count: schemaTypes.JSON || 0 },
+        { label: 'PROTOBUF', color: '#9C27B0', count: schemaTypes.PROTOBUF || 0 },
+      ].filter(d => d.count > 0);
+      const hasTypes = typeDefs.length > 0;
+
+      const srKpis = `
+        <div class="kpi-grid">
+          <div class="kpi ${isHealthy ? 'kpi--success' : 'kpi--danger'}">
+            <div class="kpi__label">Status</div>
+            <div class="kpi__value"><span class="sev sev--${isHealthy ? 'healthy' : 'critical'}">${(data.status || 'unknown').toUpperCase()}</span></div>
+            <div class="kpi__sub">${data.url || ''}</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Subjects</div>
+            <div class="kpi__value">${data.subject_count ?? subjects.length}</div>
+            <div class="kpi__sub">registered schemas</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Total Versions</div>
+            <div class="kpi__value">${data.total_versions || 0}</div>
+            <div class="kpi__sub">across all subjects</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Compatibility</div>
+            <div class="kpi__value" style="font-size:1.1rem;color:${compatColor[data.global_compatibility] || 'var(--text)'}">${data.global_compatibility || 'BACKWARD'}</div>
+            <div class="kpi__sub">default policy</div>
+          </div>
+        </div>`;
+
+      const srChart = hasTypes
+        ? `<div style="display:flex;margin-bottom:22px">
+             <div class="chart-card" style="flex:0 1 50%;min-width:300px">
+               <div class="chart-card__title">Schema Types Distribution</div>
+               <div class="chart-wrap" style="height:220px"><canvas id="sr-types-chart"></canvas></div>
+             </div>
+           </div>`
+        : `<div class="filter-bar" style="color:var(--text-muted)">ℹ️ No schemas registered yet</div>`;
+
+      const srRowHtml = s => `<tr>
+          <td style="font-weight:600"><code style="font-size:.8rem">${s.subject}</code></td>
+          <td style="text-align:center">${s.version_count ?? 0}</td>
+          <td><span style="color:${compatColor[s.compatibility] || 'var(--text-muted)'};font-size:.82rem;font-weight:600">${s.compatibility || '-'}</span></td>
+          <td><span style="background:${(typeColors[s.schema_type] || '#64748b')}22;color:${typeColors[s.schema_type] || '#64748b'};padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700">${s.schema_type || '-'}</span></td>
+        </tr>`;
+
+      el.innerHTML = srKpis + srChart + `
+        <div class="chart-card__title">Subject Inventory</div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Subject Name</th>
+                <th style="text-align:center">Versions</th>
+                <th>Compatibility</th>
+                <th>Latest Schema Type</th>
+              </tr>
+            </thead>
+            <tbody id="sr-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px">
+          <span id="sr-count-label" class="dash-label"></span>
+          <button id="sr-show-more" class="btn btn--secondary btn--sm" onclick="window._srShowMore()">Show More</button>
+        </div>`;
+
+      const SR_PAGE = 20;
+      window._srView = { visible: SR_PAGE };
+      window._srApplyView = function () {
+        const shown = subjects.slice(0, window._srView.visible);
+        const tbody = document.getElementById('sr-tbody');
+        if (tbody) {
+          tbody.innerHTML = shown.map(srRowHtml).join('') ||
+            `<tr><td colspan="4" class="data-table__empty">No subjects registered — publish schemas to see them here</td></tr>`;
+        }
+        const label = document.getElementById('sr-count-label');
+        if (label) label.textContent = `Showing ${shown.length} of ${subjects.length} subjects`;
+        const moreBtn = document.getElementById('sr-show-more');
+        if (moreBtn) moreBtn.style.display = shown.length < subjects.length ? '' : 'none';
+      };
+      window._srShowMore = function () { window._srView.visible += SR_PAGE; window._srApplyView(); };
+      window._srApplyView();
+
+      if (hasTypes) {
+        setTimeout(() => {
+          if (window._srTypesChart) { window._srTypesChart.destroy(); window._srTypesChart = null; }
+          const ctx = document.getElementById('sr-types-chart')?.getContext('2d');
+          if (ctx) {
+            window._srTypesChart = new Chart(ctx, {
+              type: 'doughnut',
+              data: {
+                labels: typeDefs.map(d => d.label),
+                datasets: [{ data: typeDefs.map(d => d.count), backgroundColor: typeDefs.map(d => d.color), borderWidth: 0 }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+              },
+            });
+          }
+        }, 0);
+      }
+      window._renderTabAI('schema-registry', document.getElementById('tab-schema-registry'));
+    }
+
+    function renderZooKeeper(data) {
+      const el = document.getElementById('tab-zookeeper');
+
+      if (data.mode === 'kraft' || data.status === 'not_configured') {
+        el.innerHTML = `
+          <div class="anomaly-card" style="border-color:#3b82f6;border-width:2px;max-width:600px">
+            <div style="font-size:1.1rem;font-weight:700;color:#3b82f6;margin-bottom:8px">
+              ⚡ KRaft Mode
+            </div>
+            <div style="font-size:.88rem;color:var(--text);line-height:1.6">
+              ${data.message || 'This cluster is running in KRaft mode — no ZooKeeper required.'}
+            </div>
+            <div style="margin-top:12px;font-size:.8rem;color:var(--text-muted)">
+              KRaft (Kafka Raft) is the modern consensus protocol built into Kafka,
+              replacing ZooKeeper for metadata management. Available since Kafka 3.3+.
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (data.status === 'unreachable' || data.status === 'error') {
+        el.innerHTML = emptyState('❌', 'ZooKeeper unreachable',
+          data.error || `Could not connect to ${data.url}`);
+        return;
+      }
+
+      const m = data.metrics || {};
+      const isHealthy = data.status === 'healthy';
+      const avgLat = m.avg_latency_ms || 0;
+      const latClass = avgLat > 50 ? 'kpi--danger' : avgLat > 10 ? 'kpi--warn' : 'kpi--success';
+      const modeColor = {
+        'leader': '#FF6B35',
+        'follower': '#3b82f6',
+        'standalone': 'var(--success)',
+      }[data.server_mode] || 'var(--text-muted)';
+
+      const zkKpis = `
+        <div class="kpi-grid">
+          <div class="kpi ${isHealthy ? 'kpi--success' : 'kpi--danger'}">
+            <div class="kpi__label">Status</div>
+            <div class="kpi__value"><span class="sev sev--${isHealthy ? 'healthy' : 'critical'}">${(data.status || 'unknown').toUpperCase()}</span></div>
+            <div class="kpi__sub">${data.url || ''}</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Mode</div>
+            <div class="kpi__value" style="font-size:1.1rem;text-transform:uppercase;color:${modeColor}">${data.server_mode || 'unknown'}</div>
+            <div class="kpi__sub">${data.version || ''}</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Znode Count</div>
+            <div class="kpi__value">${(m.znode_count || 0).toLocaleString()}</div>
+            <div class="kpi__sub">znodes</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Connections</div>
+            <div class="kpi__value">${(m.connections || 0).toLocaleString()}</div>
+            <div class="kpi__sub">active clients</div>
+          </div>
+          <div class="kpi ${latClass}">
+            <div class="kpi__label">Avg Latency</div>
+            <div class="kpi__value">${avgLat}ms</div>
+            <div class="kpi__sub">avg request latency</div>
+          </div>
+        </div>`;
+
+      const zkCharts = `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px">
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">ZooKeeper Metrics</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="zk-metrics-chart"></canvas></div>
+          </div>
+          <div class="chart-card" style="flex:1;min-width:300px;margin-bottom:0">
+            <div class="chart-card__title">Packets I/O</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="zk-packets-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      const warningBanners = (data.warnings || []).map(w =>
+        `<div class="filter-bar" style="color:#d97706;border-color:rgba(217,119,6,.35)">⚠ ${w}</div>`
+      ).join('');
+
+      const kv = (k, v) => `<div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--text-muted)">${k}</span><span style="font-weight:600">${v}</span></div>`;
+      const zkDetail = `
+        <div class="chart-card__title">ZooKeeper Detail</div>
+        <div class="anomaly-card" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px 28px">
+          ${kv('Version', data.version || '-')}
+          ${kv('URL', data.url || '-')}
+          ${kv('Max Latency', (m.max_latency_ms || 0) + 'ms')}
+          ${kv('Outstanding Requests', (m.outstanding_requests || 0).toLocaleString())}
+          ${kv('Data Size', fmtBytes(m.data_size_bytes || 0))}
+          ${kv('Open FDs / Max FDs', `${m.open_file_descriptors || 0} / ${m.max_file_descriptors || 0}`)}
+        </div>`;
+
+      el.innerHTML = zkKpis + zkCharts + warningBanners + zkDetail;
+
+      setTimeout(() => {
+        if (window._zkMetricsChart) { window._zkMetricsChart.destroy(); window._zkMetricsChart = null; }
+        const mCtx = document.getElementById('zk-metrics-chart')?.getContext('2d');
+        if (mCtx) {
+          window._zkMetricsChart = new Chart(mCtx, {
+            type: 'bar',
+            data: {
+              labels: ['Znodes', 'Watches', 'Ephemerals', 'Connections'],
+              datasets: [{ label: 'Count', data: [m.znode_count || 0, m.watch_count || 0, m.ephemerals_count || 0, m.connections || 0], backgroundColor: '#4FC3F7', borderWidth: 0 }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: v => fmtNum(v), font: { size: 10 } } } },
+            },
+          });
+        }
+
+        if (window._zkPacketsChart) { window._zkPacketsChart.destroy(); window._zkPacketsChart = null; }
+        const pCtx = document.getElementById('zk-packets-chart')?.getContext('2d');
+        if (pCtx) {
+          window._zkPacketsChart = new Chart(pCtx, {
+            type: 'bar',
+            data: {
+              labels: ['Packets Received', 'Packets Sent'],
+              datasets: [{ label: 'Packets', data: [m.packets_received || 0, m.packets_sent || 0], backgroundColor: ['#4CAF50', '#FF6B35'], borderWidth: 0 }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: v => fmtNum(v), font: { size: 10 } } } },
+            },
+          });
+        }
+      }, 0);
+      window._renderTabAI('zookeeper', document.getElementById('tab-zookeeper'));
+    }
+
+    function renderMirrorMaker(data) {
+      const el = document.getElementById('tab-mirrormaker');
+
+      if (!data.detected) {
+        el.innerHTML = `<div class="filter-bar" style="color:var(--text-muted)">ℹ️ No MirrorMaker detected on this cluster</div>`;
+        return;
+      }
+
+      const modeColors = {
+        'mm1': '#f59e0b',
+        'mm2': '#3b82f6',
+        'both': '#8b5cf6',
+      };
+      const modeColor = modeColors[data.mode] || 'var(--text)';
+
+      const groupCount = (data.mm1 && data.mm1.group_count) ?? (data.mm2 && data.mm2.group_count) ?? 0;
+      const totalLag   = (data.mm1 && data.mm1.total_lag) ?? (data.mm2 && data.mm2.total_lag) ?? 0;
+      const mmStatus   = (data.mm1 && data.mm1.status) || (data.mm2 && data.mm2.status) || 'unknown';
+      const isHealthy  = mmStatus === 'healthy';
+      const lagClass   = totalLag > 10000 ? 'kpi--danger' : totalLag > 1000 ? 'kpi--warn' : 'kpi--success';
+
+      const mmKpis = `
+        <div class="kpi-grid">
+          <div class="kpi">
+            <div class="kpi__label">Mode</div>
+            <div class="kpi__value"><span style="background:${modeColor}22;color:${modeColor};padding:3px 12px;border-radius:20px;font-size:.95rem;font-weight:700;text-transform:uppercase">${data.mode || '-'}</span></div>
+            <div class="kpi__sub">replication mode</div>
+          </div>
+          <div class="kpi kpi--orange">
+            <div class="kpi__label">Consumer Groups</div>
+            <div class="kpi__value">${groupCount}</div>
+            <div class="kpi__sub">replication groups</div>
+          </div>
+          <div class="kpi ${lagClass}">
+            <div class="kpi__label">Total Lag</div>
+            <div class="kpi__value">${fmtNum(totalLag)}</div>
+            <div class="kpi__sub">across groups</div>
+          </div>
+          <div class="kpi ${isHealthy ? 'kpi--success' : 'kpi--danger'}">
+            <div class="kpi__label">Status</div>
+            <div class="kpi__value"><span class="sev sev--${isHealthy ? 'healthy' : 'warning'}">${mmStatus.toUpperCase()}</span></div>
+            <div class="kpi__sub">health</div>
+          </div>
+        </div>`;
+
+      // Per-group lag bars (mm1 group names have no per-group lag → single "All Groups" bar)
+      const lagSrc = data.mm1 || data.mm2 || {};
+      const cgs = lagSrc.consumer_groups;
+      let lagBars;
+      if (Array.isArray(cgs) && cgs.length && typeof cgs[0] === 'object' && cgs[0] !== null) {
+        lagBars = cgs.map(g => ({ name: g.group_id || g.name || g.group || 'group', lag: g.lag ?? g.total_lag ?? 0 }));
+      } else {
+        lagBars = [{ name: 'All Groups', lag: totalLag }];
+      }
+      const barColor = lag => lag > 10000 ? '#dc2626' : lag > 1000 ? '#d97706' : '#16a34a';
+
+      const mmChart = `
+        <div style="display:flex;margin-bottom:22px">
+          <div class="chart-card" style="flex:0 1 50%;min-width:300px">
+            <div class="chart-card__title">MirrorMaker Consumer Group Lag</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="mm-lag-chart"></canvas></div>
+          </div>
+        </div>`;
+
+      // Detail section
+      let mmDetail = '';
+      if (data.mm1) {
+        const badges = (data.mm1.consumer_groups || []).map(g => {
+          const name = (typeof g === 'object' && g) ? (g.group_id || g.name || g.group || 'group') : g;
+          return `<span style="background:#f59e0b22;color:#f59e0b;padding:3px 10px;border-radius:20px;font-size:.78rem;font-weight:600">${name}</span>`;
+        }).join(' ');
+        mmDetail += `
+          <div class="chart-card__title">MirrorMaker 1 — Consumer Groups</div>
+          <div class="anomaly-card" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">${badges || '<span style="color:var(--text-muted)">No groups</span>'}</div>`;
+      }
+      if (data.mm2) {
+        const cc = data.cross_cluster;
+        const ccInfo = cc ? `${cc.source_cluster} → ${cc.target_cluster}` : 'Source/target cluster info not available';
+        mmDetail += `
+          <div class="chart-card__title">MirrorMaker 2 — Replication</div>
+          <div class="anomaly-card" style="margin-bottom:14px">
+            <div style="font-weight:600;margin-bottom:6px">${ccInfo}</div>
+            <div style="font-size:.82rem;color:var(--text-muted)">Internal topics: ${(data.mm2.internal_topics || []).length}${cc ? ` · Topics replicated: ${cc.total_topics_replicated ?? 0}` : ''}</div>
+          </div>`;
+      }
+
+      el.innerHTML = mmKpis + mmChart + mmDetail;
+
+      setTimeout(() => {
+        if (window._mmLagChart) { window._mmLagChart.destroy(); window._mmLagChart = null; }
+        const ctx = document.getElementById('mm-lag-chart')?.getContext('2d');
+        if (ctx) {
+          window._mmLagChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: lagBars.map(b => b.name),
+              datasets: [{ label: 'Lag', data: lagBars.map(b => b.lag), backgroundColor: lagBars.map(b => barColor(b.lag)), borderWidth: 0 }],
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, title: { display: false } },
+              scales: { x: { beginAtZero: true, ticks: { callback: v => fmtNum(v), font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } },
+            },
+          });
+        }
+      }, 0);
+      window._renderTabAI('mirrormaker', document.getElementById('tab-mirrormaker'));
+    }
+
+    async function init() {
+      await portalReady;
+      await loadClusterSelector();
+      try {
+        const cfg = await api('/settings');
+        if (cfg.source_type === 'synthetic') {
+          document.getElementById('genBtn').style.display = '';
+        }
+      } catch(_) {}
+      loadTab('overview');
+    }
+
+    document.getElementById('ctrl-time').addEventListener('change', () => {
+      _loaded.clear();
+      const activeBtn = document.querySelector('.tab-btn--active');
+      const activeTab = activeBtn ? activeBtn.dataset.tab : 'overview';
+      loadTab(activeTab);
+    });
+    init();
+  </script>
+  <script>
+    // ── Fix nav links in standalone mode ──────────────────────────────────
+    if (!_isPortalMode) {
+      document.querySelectorAll('[data-standalone-href]').forEach(el => {
+        el.href = el.dataset.standaloneHref;
+      });
+      var topbar = document.querySelector('.topbar');
+      if (topbar) topbar.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
