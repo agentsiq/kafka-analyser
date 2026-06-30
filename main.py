@@ -496,7 +496,7 @@ async def _collection_loop() -> None:
                                     cluster_name=c["name"],
                                     anomalies=anomalies,
                                     config=teams_cfg,
-                                    dashboard_url="http://kpi-internal.cloud.operative.com:3000/agents/kafka-analyser/dashboard",
+                                    dashboard_url="http://kpi-internal.cloud.agentsiq.net:3000/agents/kafka-analyser/dashboard",
                                 )
                                 if sent:
                                     _collection_loop._summary_cooldown[cooldown_key] = now

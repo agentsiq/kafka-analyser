@@ -215,7 +215,7 @@ async def test_teams_webhook(request: Request) -> dict:
     test_anomaly = {
         "severity": "info",
         "category": "test",
-        "description": "This is a test message from Operative Intelligence. "
+        "description": "This is a test message from AgentsIQ. "
                        "Teams escalation is configured correctly.",
         "recommended_action": "No action required — this is a connectivity test.",
     }
@@ -440,7 +440,7 @@ async def sync_metrics() -> dict:
                             cluster_name=c["name"],
                             anomalies=anomalies,
                             config=teams_cfg,
-                            dashboard_url="http://kpi-internal.cloud.operative.com:3000/agents/kafka-analyser/dashboard",
+                            dashboard_url="http://kpi-internal.cloud.agentsiq.net:3000/agents/kafka-analyser/dashboard",
                         )
                         if sent:
                             sync_metrics._summary_cooldown[cooldown_key] = now
